@@ -5,7 +5,7 @@ export type Role = "admin" | "parent"
 export type User = { id: string; name: string; role: Role; salt: string; hash: string }
 export type Session = { uid: string; role: Role; name: string }
 
-const COOKIE = "wn_s"
+const COOKIE = "wn_sess"
 const TTL: Record<Role, number> = { admin: 60 * 86400_000, parent: 30 * 86400_000 }
 
 function secret() {
@@ -88,8 +88,8 @@ export async function readSession(req: Request): Promise<Session | null> {
   return { uid, role: u.role, name: u.name }
 }
 export const setCookie = (tok: string, role: Role) =>
-  `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${TTL[role] / 1000}`
-export const clearCookie = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`
+  `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${TTL[role] / 1000}`
+export const clearCookie = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=0`
 
 // Chống dò PIN theo từng tài khoản: sai 5 lần → khoá 15 phút
 export async function login(uid: string, pin: string): Promise<{ user?: User; error?: string }> {

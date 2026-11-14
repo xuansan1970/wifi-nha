@@ -187,7 +187,7 @@ async function renderLogin(pre) {
     if (pin.length === 4) {
       try {
         const r = await api("/login", { body: { uid, pin } });
-        localStorage.setItem("wn_uid", uid); S.me = r.me; document.removeEventListener("keydown", kb); boot();
+        localStorage.setItem("wn_uid", uid); S.me = r.me; S.tab = "home"; S._unread = null; document.removeEventListener("keydown", kb); boot();
       } catch (e) { $("#le").textContent = e.message; const pb = $("#pb"); pb.classList.remove("shake"); void pb.offsetWidth; pb.classList.add("shake"); pin = ""; setTimeout(() => $$("#pb i").forEach((x) => x.classList.remove("f")), 300); }
     }
   };
