@@ -709,11 +709,13 @@ function confirmBox(title, msg, ok, danger) {
 
 /* ---------- Trang: Camera WebRTC (go2rtc) & Đèn thông minh (admin) ---------- */
 const CAM_NAMES = {
-  ezviz_ty1: "Ezviz TY1 (Phòng / Trong nhà)",
-  ezviz_c3w_1: "Ezviz C3W 1",
-  ezviz_c3w_2: "Ezviz C3W 2",
-  ezviz_h3c_2: "Ezviz H3c 2",
-  ezviz_h3c_3: "Ezviz H3c 3",
+  ezviz_ty1: "Ezviz TY1 · Trong nhà (2247)",
+  ezviz_c3w_1: "Ezviz C3W 1 · Sân vườn",
+  ezviz_c3w_2: "Ezviz C3W 2 · Lầu 1",
+  ezviz_h3c_2: "Ezviz H3c 2 · Tầng 2 (6225)",
+  ezviz_h3c_3: "Ezviz H3c 3 · Tầng 2 (6220)",
+  ezviz_f2af: "Ezviz · Tầng trệt (F2AF)",
+  ezviz_f909: "Ezviz · Tầng trệt (F909)",
 };
 
 function destroyCamPcs() {
@@ -801,11 +803,7 @@ async function startWebRtc(src, video, stat) {
 }
 
 function mountWebRtcAll() {
-  if (!S.cam.gatewayUrl || !S.cam.streams.length) return;
-  S.cam.streams.forEach((src) => {
-    const v = $("#cam-v-" + src), st = $("#cam-st-" + src);
-    if (v) startWebRtc(src, v, st);
-  });
+  // Stream phát qua iframe stream.html của go2rtc (tự ưu tiên WebRTC, fallback MSE qua HTTPS)
 }
 
 function vCameras() {
@@ -827,11 +825,10 @@ function vCameras() {
           <div class="cam-h">
             <b>${esc(CAM_NAMES[src] || src)}</b>
             <div class="grow"></div>
-            <span class="chip" id="cam-st-${esc(src)}"><span class="dot"></span>Đang nối…</span>
+            <span class="chip ok"><span class="dot"></span>Trực tiếp</span>
           </div>
-          <div class="cam-box"><video id="cam-v-${esc(src)}" autoplay playsinline muted></video></div>
+          <div class="cam-box"><iframe id="cam-v-${esc(src)}" src="${esc(c.gatewayUrl)}/stream.html?src=${encodeURIComponent(src)}&mode=webrtc,mse,hls,mjpeg" allow="autoplay; fullscreen" allowfullscreen loading="lazy"></iframe></div>
           <div class="cam-bar">
-            <button class="btn sm" data-cam-mute="${esc(src)}">Bật tiếng</button>
             <button class="btn sm" data-cam-retry="${esc(src)}">${I.refresh}Nối lại</button>
             <button class="btn sm" data-cam-fs="${esc(src)}">${I.eye}Phóng to</button>
           </div>
@@ -851,16 +848,9 @@ function bindCameras(root) {
     const url = $("#cam-gw-in", root)?.value?.trim() || "";
     await act(gf.querySelector("button"), async () => { await api("/cam/config", { body: { gatewayUrl: url } }); await loadCameras(); }, "Đã lưu Camera Gateway").catch(() => {});
   };
-  $$("[data-cam-mute]", root).forEach((b) => (b.onclick = () => {
-    const v = $("#cam-v-" + b.dataset.camMute);
-    if (!v) return;
-    v.muted = !v.muted;
-    b.textContent = v.muted ? "Bật tiếng" : "Tắt tiếng";
-  }));
   $$("[data-cam-retry]", root).forEach((b) => (b.onclick = () => {
-    const src = b.dataset.camRetry;
-    try { S.cam.pcs[src]?.close(); } catch {}
-    startWebRtc(src, $("#cam-v-" + src), $("#cam-st-" + src));
+    const f = $("#cam-v-" + b.dataset.camRetry);
+    if (f) f.src = f.src;
   }));
   $$("[data-cam-fs]", root).forEach((b) => (b.onclick = () => {
     const v = $("#cam-v-" + b.dataset.camFs);
