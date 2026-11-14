@@ -48,7 +48,15 @@ export async function loadUsers(): Promise<User[]> {
   await setJSON("users", users)
   return users
 }
-export const publicUsers = async () => (await loadUsers()).map(({ id, name, role }) => ({ id, name, role }))
+// Ô đăng nhập: admin hiện riêng; mọi tài khoản phụ huynh gộp thành 1 ô "Ba Mẹ" (PIN cho biết là ai)
+export const PARENT_GROUP = "bame"
+export const publicUsers = async () => {
+  const us = await loadUsers()
+  const out = us.filter((u) => u.role === "admin").map(({ id, name, role }) => ({ id, name, role }))
+  if (us.some((u) => u.role === "parent")) out.push({ id: PARENT_GROUP, name: "Ba Mẹ", role: "parent" })
+  return out
+}
+export const allUsers = async () => (await loadUsers()).map(({ id, name, role }) => ({ id, name, role }))
 
 export async function setPin(uid: string, pin: string) {
   if (!/^\d{4,8}$/.test(pin)) throw new Error("PIN phải gồm 4–8 chữ số")
@@ -86,16 +94,18 @@ export const clearCookie = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Stric
 // Chống dò PIN theo từng tài khoản: sai 5 lần → khoá 15 phút
 export async function login(uid: string, pin: string): Promise<{ user?: User; error?: string }> {
   const users = await loadUsers()
-  const u = users.find((x) => x.id === uid)
-  if (!u) return { error: "Chọn tài khoản" }
+  const group = uid === PARENT_GROUP ? users.filter((x) => x.role === "parent") : users.filter((x) => x.id === uid)
+  if (!group.length) return { error: "Chọn tài khoản" }
   const key = `pinfail-${uid}`
   const f = await getJSON<{ n: number; until: number }>(key, { n: 0, until: 0 })
   if (f.until > Date.now()) return { error: `Sai quá nhiều lần, thử lại sau ${Math.ceil((f.until - Date.now()) / 60000)} phút` }
-  const a = Buffer.from(hashPin(String(pin), u.salt))
-  const b = Buffer.from(u.hash)
-  if (a.length === b.length && timingSafeEqual(a, b)) {
-    if (f.n) await setJSON(key, { n: 0, until: 0 })
-    return { user: u }
+  for (const u of group) {
+    const a = Buffer.from(hashPin(String(pin), u.salt))
+    const b = Buffer.from(u.hash)
+    if (a.length === b.length && timingSafeEqual(a, b)) {
+      if (f.n) await setJSON(key, { n: 0, until: 0 })
+      return { user: u }
+    }
   }
   const n = f.n + 1
   await setJSON(key, n >= 5 ? { n: 0, until: Date.now() + 15 * 60000 } : { n, until: 0 })

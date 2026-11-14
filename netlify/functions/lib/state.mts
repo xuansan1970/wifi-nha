@@ -40,7 +40,7 @@ export type Dev = {
   kind?: string
   vendor?: string
 }
-export type LogItem = { t: number; text: string; ok: boolean; by: string }
+export type LogItem = { t: number; text: string; ok: boolean; by: string; role?: "admin" | "parent" | "system" }
 
 export const loadState = async (): Promise<State> => {
   const s: any = await getJSON("state", {})
@@ -153,4 +153,12 @@ export async function rebootGroups(gids: number[]) {
   const sns = lists.flat().map((d: any) => d.sn)
   if (sns.length) await R.reboot(sns)
   return sns
+}
+
+// ---- IoT: WiFi ẩn / tên có "iot" và thiết bị nhà thông minh — giấu khỏi tài khoản Ba Mẹ
+export const isIotSsid = (s: { name?: string; hidden?: boolean }) => /iot/i.test(s.name || "") || !!s.hidden
+export const IOT_KINDS = ["iot", "camera", "fan", "light", "ac", "printer", "router"]
+export function isIotDevice(d: { ssid?: string; kind?: string } | undefined, iotSsids: Set<string>) {
+  if (!d) return false
+  return IOT_KINDS.includes(d.kind || "") || (!!d.ssid && iotSsids.has(d.ssid))
 }

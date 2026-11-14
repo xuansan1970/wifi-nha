@@ -1,13 +1,13 @@
 import type { Config } from "@netlify/functions"
 import * as R from "./lib/ruijie.mts"
-import { clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
+import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
 import { exec, Usage } from "./lib/engine.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import {
-  addLog, getLog, labelOf, loadDevices, loadMeta, loadState, mutate, Rule, saveMeta, Target, vn,
+  addLog, getLog, isIotDevice, isIotSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
-import { getJSON } from "./lib/store.mts"
+import { getJSON, setJSON } from "./lib/store.mts"
 
 const json = (data: any, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
@@ -118,16 +118,43 @@ async function view(snapMaxAge: number, s: Session) {
       lastSeen: d.lastSeen,
     }))
     .sort((a, b) => b.lastSeen - a.lastSeen)
+  const parent = s.role !== "admin"
+  const iotSsids = new Set<string>()
+  snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isIotSsid(x) && iotSsids.add(x.name)))
+  const iotMac = (mac: string) => isIotDevice(devices[mac], iotSsids)
+  // Ba Mẹ: giấu WiFi IoT/ẩn và mọi thiết bị IoT, không cần thông tin kỹ thuật
+  const routers = parent
+    ? snap.routers.map((r: any) => ({
+        gid: r.gid,
+        name: r.name,
+        floor: r.floor,
+        order: r.order,
+        online: r.online,
+        device: null,
+        devices: [],
+        blocked: r.blocked.filter((m: string) => !iotMac(m)),
+        ssids: r.ssids.filter((x: any) => !isIotSsid(x)),
+        clients: r.clients.filter((c: any) => !iotSsids.has(c.ssid) && !iotMac(c.mac)),
+        errors: [],
+      }))
+    : snap.routers
+  let notif: any = null
+  if (!parent) {
+    const [log, seen] = await Promise.all([getLog(), getJSON<number>(`seen-${s.uid}`, 0)])
+    const items = log.filter((l) => l.role === "parent").slice(0, 40)
+    notif = { unread: items.filter((l) => l.t > seen).length, items, seen }
+  }
   return {
     me: s,
     at: snap.at,
-    errors: snap.errors,
-    routers: snap.routers,
+    errors: parent ? [] : snap.errors,
+    routers,
+    notif,
     people: st.people,
     temps: st.temps,
-    rules: st.rules,
-    blocked,
-    known: s.role === "admin" ? known : known.filter((k) => k.owner),
+    rules: parent ? [] : st.rules,
+    blocked: parent ? blocked.filter((b) => !iotMac(b.mac)) : blocked,
+    known: parent ? known.filter((k) => !iotMac(k.mac)) : known,
     usage: usage.date === today ? usage.m : {},
     kinds: KIND_VI,
   }
@@ -151,7 +178,11 @@ export default async (req: Request) => {
     if (path === "/users" && m === "GET") return json({ users: await publicUsers() })
     if (path === "/login" && m === "POST") {
       const r = await login(String(body.uid ?? ""), String(body.pin ?? ""))
-      if (!r.user) return json({ error: r.error }, 401)
+      if (!r.user) {
+        if (body.uid === "bame") await addLog([{ t: Date.now(), ok: false, by: "Ba Mẹ", role: "parent", text: "Nhập sai PIN tài khoản Ba Mẹ" }])
+        return json({ error: r.error }, 401)
+      }
+      if (r.user.role === "parent") await addLog([{ t: Date.now(), ok: true, by: r.user.name, role: "parent", text: `${r.user.name} đăng nhập` }])
       return json({ ok: true, me: { uid: r.user.id, name: r.user.name, role: r.user.role } }, 200, {
         "Set-Cookie": setCookie(makeToken(r.user), r.user.role),
       })
@@ -162,7 +193,59 @@ export default async (req: Request) => {
     const s = await readSession(req)
     if (!s) return json({ error: "Cần đăng nhập" }, 401)
 
+    const L = (items: LogItem[]) => addLog(items.map((i) => ({ ...i, role: s.role })))
+    const parent = s.role !== "admin"
+    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout"].includes(path))
+      throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
+
+    // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
+    const guardIot = async (target: Target) => {
+      if (!parent || target.kind !== "device") return
+      const [snap, devices] = await Promise.all([getSnapshot(10 * 60_000), loadDevices()])
+      const iot = new Set<string>()
+      snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isIotSsid(x) && iot.add(x.name)))
+      if (isIotDevice(devices[target.id], iot)) throw new Http(403, "Thiết bị IoT chỉ Xuân San chỉnh được")
+    }
+
     if (path === "/me") return json({ me: s })
+    if (path === "/notifs/seen" && m === "POST") {
+      await setJSON(`seen-${s.uid}`, Date.now())
+      return json({ ok: true })
+    }
+    if (path === "/eweb/open" && m === "POST") {
+      if (parent) throw new Http(403, "Chỉ Xuân San dùng eWeb")
+      const gid = Number(body.gid)
+      const hours = Math.max(1, Math.min(24, Math.round(Number(body.hours) || 1)))
+      const devs = await R.listDevices(gid)
+      const d = devs[0]
+      if (!d) throw new Http(400, "Không tìm thấy router")
+      if (!d.online) throw new Http(400, "Router đang offline, không mở eWeb được")
+      const t = await R.openEweb(d.sn, hours)
+      const map = await getJSON<Record<string, any>>("eweb", {})
+      map[d.sn] = { tunnelId: t.tunnelId, until: Date.now() + hours * 3600_000, gid }
+      await setJSON("eweb", map)
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Mở eWeb router ${d.name} (${hours}h)` }])
+      return json({ url: t.url, until: map[d.sn].until })
+    }
+    if (path === "/eweb/close" && m === "POST") {
+      if (parent) throw new Http(403, "Chỉ Xuân San dùng eWeb")
+      const gid = Number(body.gid)
+      const d = (await R.listDevices(gid))[0]
+      const map = await getJSON<Record<string, any>>("eweb", {})
+      const cur = d && map[d.sn]
+      if (cur?.tunnelId) await R.closeEweb(d.sn, cur.tunnelId).catch(() => {})
+      if (d) delete map[d.sn]
+      await setJSON("eweb", map)
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Đóng eWeb router ${d?.name ?? gid}` }])
+      return json({ ok: true })
+    }
+    if (path === "/eweb/status") {
+      if (parent) throw new Http(403, "Chỉ Xuân San dùng eWeb")
+      const map = await getJSON<Record<string, any>>("eweb", {})
+      const out: Record<string, number> = {}
+      for (const v of Object.values(map)) if (v.until > Date.now()) out[v.gid] = v.until
+      return json({ open: out })
+    }
     // fast=1: trả dữ liệu đã lưu (≤10 phút) ngay; mặc định: làm mới nếu cũ hơn 20s
     if (path === "/view") return json(await view(url.searchParams.get("fast") ? 10 * 60_000 : 20_000, s))
     if (path === "/refresh" && m === "POST") {
@@ -174,6 +257,7 @@ export default async (req: Request) => {
     // ---- chặn / mở (Ba Mẹ cũng dùng được) ----
     if (path === "/block" && m === "POST") {
       const target = await parseTarget(body.target)
+      await guardIot(target)
       const minutes = Math.max(0, Math.min(10080, Math.round(Number(body.minutes) || 0)))
       const [st, devices, meta] = await Promise.all([loadState(), loadDevices(), loadMeta()])
       const label = labelOf(target, st, devices, meta)
@@ -181,15 +265,16 @@ export default async (req: Request) => {
         { kind: "block", target, label, until: minutes ? Date.now() + minutes * 60000 : undefined, reason: minutes ? `${minutes}′` : "" },
         s.name,
       )
-      await addLog([log])
+      await L([log])
       if (!log.ok) throw new Http(502, log.text)
       return json({ ok: true })
     }
     if (path === "/unblock" && m === "POST") {
       const target = await parseTarget(body.target)
+      await guardIot(target)
       const [st, devices, meta] = await Promise.all([loadState(), loadDevices(), loadMeta()])
       const log = await exec({ kind: "unblock", target, label: labelOf(target, st, devices, meta) }, s.name)
-      await addLog([log])
+      await L([log])
       if (!log.ok) throw new Http(502, log.text)
       return json({ ok: true })
     }
@@ -198,25 +283,30 @@ export default async (req: Request) => {
       const target = body.gid === "all" ? all : [Number(body.gid)].filter((g) => all.includes(g))
       if (!target.length) throw new Http(400, "Router không hợp lệ")
       const log = await exec({ kind: "reboot", gids: target, label: String(body.label || "").slice(0, 40) || "bấm tay" }, s.name)
-      await addLog([log])
+      await L([log])
       if (!log.ok) throw new Http(502, log.text)
       return json({ ok: true })
     }
-
-    // ---------- chỉ admin ----------
-    needAdmin(s)
 
     if (path === "/wifi/toggle" && m === "POST") {
       const gid = Number(body.gid)
       if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      if (parent) {
+        const snap = await getSnapshot(10 * 60_000)
+        const ss = snap.routers.find((r: any) => r.gid === gid)?.ssids.find((x: any) => x.id === Number(body.ssidId))
+        if (!ss || isIotSsid(ss)) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
+      }
       const log = await exec(
         { kind: "wifi", enable: !!body.enable, targets: [{ gid, ssidIds: [Number(body.ssidId)] }], label: String(body.name || "").slice(0, 40) },
         s.name,
       )
-      await addLog([log])
+      await L([log])
       if (!log.ok) throw new Http(502, log.text)
       return json({ ok: true })
     }
+    // ---------- chỉ admin ----------
+    needAdmin(s)
+
     if (path === "/wifi/create" && m === "POST") {
       const name = String(body.name || "").trim()
       const pass = String(body.password || "")
@@ -234,7 +324,7 @@ export default async (req: Request) => {
         } catch (e: any) {
           errs.push(e.message)
         }
-      await addLog([{ t: Date.now(), ok: !errs.length, by: s.name, text: `Tạo WiFi “${name}” trên ${targets.length - errs.length}/${targets.length} router${errs.length ? ` — ${errs[0]}` : ""}` }])
+      await L([{ t: Date.now(), ok: !errs.length, by: s.name, text: `Tạo WiFi “${name}” trên ${targets.length - errs.length}/${targets.length} router${errs.length ? ` — ${errs[0]}` : ""}` }])
       if (errs.length === targets.length) throw new Http(502, errs[0])
       await buildSnapshot().catch(() => {})
       return json({ ok: true, errors: errs })
@@ -274,7 +364,7 @@ export default async (req: Request) => {
         }
       await R.updateSsid(gid, Number(body.ssidId), p)
       const changed = Object.keys(p).map((k) => (k === "password" ? "mật khẩu" : k === "name" ? "tên" : k)).join(", ")
-      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Sửa WiFi “${String(body.oldName || body.ssidId)}” (${changed || "không đổi"})` }])
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Sửa WiFi “${String(body.oldName || body.ssidId)}” (${changed || "không đổi"})` }])
       await buildSnapshot().catch(() => {})
       return json({ ok: true })
     }
@@ -282,14 +372,14 @@ export default async (req: Request) => {
       const gid = Number(body.gid)
       if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
       const { raw } = await R.ssidRaw(gid, Number(body.ssidId))
-      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Xem mật khẩu WiFi “${raw.ssidName}”` }])
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Xem mật khẩu WiFi “${raw.ssidName}”` }])
       return json({ password: raw.password ?? "" })
     }
     if (path === "/wifi/delete" && m === "POST") {
       const gid = Number(body.gid)
       if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
       await R.deleteSsid(gid, Number(body.ssidId))
-      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Xoá WiFi “${String(body.name || body.ssidId)}”` }])
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Xoá WiFi “${String(body.name || body.ssidId)}”` }])
       await buildSnapshot().catch(() => {})
       return json({ ok: true })
     }
@@ -369,10 +459,10 @@ export default async (req: Request) => {
     if (path === "/inventory") return json(await inventory())
     if (path === "/pin" && m === "POST") {
       await setPin(String(body.uid), String(body.pin))
-      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Đổi mã PIN tài khoản ${body.uid}` }])
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Đổi mã PIN tài khoản ${body.uid}` }])
       return json({ ok: true })
     }
-    if (path === "/accounts") return json({ users: await publicUsers() })
+    if (path === "/accounts") return json({ users: await allUsers() })
 
     throw new Http(404, "Không tìm thấy")
   } catch (e: any) {

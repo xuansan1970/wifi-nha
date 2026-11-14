@@ -477,3 +477,27 @@ export function parseTmngt(t: any) {
     return null
   }
 }
+
+// ---------- eWeb: trang quản trị gốc trong router, mở qua tunnel của Ruijie (tự đăng nhập) ----------
+export async function openEweb(sn: string, hours: number): Promise<{ url: string; tunnelId: number }> {
+  const op = "device_list_eweb"
+  const r = await call("/tunnel/web/get_url?client_source=web3", "POST", {
+    params: { adminProtocol: "HTTPS", sn, isDirectCreate: false, remoteHost: "127.0.0.1", operation_source: op, vaildTime: hours, autoLogin: true },
+  })
+  const d = r.data ?? {}
+  if (typeof d.useUrl === "string" && d.useUrl) return { url: d.useUrl, tunnelId: d.tunnelId ?? 0 }
+  if (Array.isArray(d.useUrl) && d.useUrl[0]) return { url: d.useUrl[0], tunnelId: d.tunnelId ?? 0 }
+  const tunnelId = Number(d.tunnelId)
+  if (!tunnelId) throw new RuijieError("Ruijie không tạo được tunnel eWeb")
+  for (let i = 0; i < 16; i++) {
+    await new Promise((res) => setTimeout(res, 1500))
+    const t = await call("/tunnel/web/get_tunnel", "POST", { params: { sn, tunnelId, operation_source: op, autoLogin: true } })
+    const x = t.data ?? {}
+    if (x.status === "ESTABLISHED" && (x.useUrl || x.domainUrl || x.ipUrl)) return { url: x.useUrl || x.domainUrl || x.ipUrl, tunnelId }
+    if (x.status === "CLOSED") throw new RuijieError("Tunnel eWeb bị đóng — router có thể đang offline")
+  }
+  throw new RuijieError("Tunnel eWeb chưa sẵn sàng, thử lại sau ít giây")
+}
+export async function closeEweb(sn: string, tunnelId: number) {
+  await call("/tunnel/destroy", "POST", { params: { sn, tunnelId } })
+}
