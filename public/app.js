@@ -278,7 +278,7 @@ function vHome() {
   const R = S.d.routers, cl = clients();
   const on = R.filter((r) => r.online).length;
   const err = S.d.errors?.length ? `<div class="alert bad">${I.alert}<div><b>Một số dữ liệu chưa tải được</b><br>${esc(S.d.errors[0])}</div></div>` : "";
-  return header("Tổng quan") + err + netHero() + `
+  return header("Tổng quan") + err + netHero() + quickWifiCard() + `
   <div class="grid g4" style="margin-bottom:16px">
     ${kpi(I.router, "Router online", `${on}/${R.length}`, on === R.length ? "Tất cả hoạt động" : "Có router mất kết nối", on === R.length ? "var(--ok)" : "var(--bad)")}
     ${kpi(I.devices, "Thiết bị online", cl.length, `${cl.filter((c) => c.kind !== "iot" && c.kind !== "camera").length} máy dùng · ${cl.filter((c) => c.kind === "iot" || c.kind === "camera").length} IoT`, "var(--pri)")}
@@ -683,6 +683,49 @@ function routerNetSub() {
   const nx = st.map((x) => x.next).filter(Boolean).sort((x, y) => x.day - y.day || (x.hm < y.hm ? -1 : 1))[0];
   return `Time limit router: <b>${off ? `${off}/${L.length} WiFi ngoài giờ` : "đang trong giờ phát"}</b>${nx ? ` · ${nx.on ? "mở" : "tắt"} lúc <b class="num">${nx.hm}</b> ${dayLbl(nx.day)}` : ""} · <a href="#" data-go-rules style="color:inherit;text-decoration:underline">xem</a>`;
 }
+/* ---------- WiFi nhanh (trang chính, cả Xuân San và Ba Mẹ): 1 công tắc / tên WiFi, gộp mọi tầng ---------- */
+function wifiGroups() {
+  const m = new Map();
+  (S.d?.routers || []).forEach((r) => r.ssids.forEach((s) => {
+    if (s.iot || s.hidden) return; // IoT/ẩn: không cho gạt nhanh (dễ làm mất camera)
+    const g = m.get(s.name) || { name: s.name, items: [], private: !!s.private }; g.items.push({ r, s }); m.set(s.name, g);
+  }));
+  return [...m.values()];
+}
+function quickWifiCard() {
+  const G = wifiGroups(); if (!G.length) return "";
+  return `<div class="card qwifi" style="margin-bottom:16px"><div class="card-h"><span style="color:var(--pri)">${I.wifi}</span><h2>WiFi nhanh</h2><div class="grow"></div><small class="hide-m">Gạt để bật/tắt ở mọi tầng</small></div>
+  <div class="list">${G.map((g, i) => {
+    const air = g.items.filter((x) => onAir(x.s)).length, sched = g.items.filter((x) => offBySched(x.s)), manualOff = g.items.filter((x) => !x.s.enable);
+    const on = air > 0, onlySched = !on && sched.length > 0 && manualOff.length === 0;
+    const st = sched[0] ? schState(sched[0].s.schedule.days) : null;
+    const sub = on ? `<span style="color:var(--ok)">Đang phát</span>${air < g.items.length ? ` · ${air}/${g.items.length} tầng` : ""}`
+      : onlySched ? `<span style="color:var(--warn)">Tắt theo lịch router</span>${st?.next ? ` · mở ${st.next.hm} ${dayLbl(st.next.day)}` : ""}`
+      : "Đang tắt";
+    return `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm"><span class="ell">${esc(g.name)}</span>${g.private ? '<span class="chip pri" style="height:20px">Riêng</span>' : ""}</div><div class="meta">${esc([...new Set(g.items.map((x) => x.r.floor))].join(", "))} · ${sub}</div></div>
+      <button class="sw ${on ? "on" : ""}${onlySched ? " sched" : ""}" role="switch" aria-checked="${on}" aria-label="Bật/tắt ${esc(g.name)}" data-wq="${i}"></button></div>`;
+  }).join("")}</div></div>`;
+}
+function bindQuickWifi(root) {
+  const G = wifiGroups();
+  $$("[data-wq]", root).forEach((b) => (b.onclick = async () => {
+    const g = G[Number(b.dataset.wq)]; if (!g) return;
+    const on = b.classList.contains("on");
+    if (b.classList.contains("sched")) {
+      const x = g.items.find((y) => offBySched(y.s)); const st = schState(x.s.schedule.days);
+      return confirmBox(`“${esc(g.name)}” đang tắt theo lịch`, `Router tự tắt WiFi này ngoài khung giờ <b>${esc(schSummary(x.s.schedule.days))}</b>${st.next ? `, tự mở lại lúc <b>${st.next.hm}</b> ${dayLbl(st.next.day)}` : ""}.<br><br>Muốn dùng ngay bây giờ thì phải sửa time limit trong eWeb.`, "Đã hiểu");
+    }
+    if (on && !(await confirmBox(`Tắt “${esc(g.name)}”?`, `Tắt ở ${g.items.length} tầng. Mọi máy đang dùng WiFi này sẽ mất mạng tới khi bật lại. Camera, thiết bị nhà thông minh không bị ảnh hưởng.`, "Tắt WiFi", true))) return;
+    const want = !on; const todo = g.items.filter((x) => x.s.enable !== want);
+    b.classList.add("busy"); b.classList.toggle("on", want);
+    const res = await Promise.allSettled(todo.map((x) => api("/wifi/toggle", { body: { gid: x.r.gid, ssidId: x.s.id, enable: want, name: g.name } }).then(() => (x.s.enable = want))));
+    const bad = res.filter((r) => r.status === "rejected");
+    b.classList.remove("busy");
+    if (bad.length) toast(`${bad.length}/${todo.length} tầng chưa đổi được: ${bad[0].reason?.message || ""}`, 1);
+    else toast(`${want ? "Đã bật" : "Đã tắt"} ${g.name} · router áp dụng sau ~30 giây`);
+    render();
+  }));
+}
 function netHero() {
   const n = S.d.net; if (!n) return "";
   const on = n.on, g = n.grant;
@@ -757,7 +800,7 @@ function vParentHome() {
   const byKind = {}; cl.forEach((c) => { const k = c.kind || "unknown"; (byKind[k] = byKind[k] || { n: 0, vi: c.kindVi || "Khác" }).n++; });
   const kinds = Object.entries(byKind).sort((a, b) => b[1].n - a[1].n);
   const nb = S.d.blocked.length;
-  return header(`Chào ${esc(S.me.name)}`) + netHero() + `<div class="grid g2" style="align-items:start">${netRulesCard()}
+  return header(`Chào ${esc(S.me.name)}`) + netHero() + quickWifiCard() + `<div class="grid g2" style="align-items:start">${netRulesCard()}
   <div class="card"><div class="card-h"><h2>Đang vào mạng</h2><div class="grow"></div><span class="chip ok">${cl.length} máy</span></div>
     ${kinds.length ? `<div class="kinds">${kinds.map(([k, v]) => `<div class="kind"><span class="av soft">${kindIc(k)}</span><b class="num">${v.n}</b><span>${esc(v.vi)}</span></div>`).join("")}</div>` : `<div class="meta" style="margin-top:-4px">Chưa có máy nào đang vào mạng.</div>`}
     ${nb ? `<div class="alert bad" style="margin:12px 0 0">${I.lock}<div><b>${nb} máy đang bị khoá</b></div></div>` : ""}
@@ -1159,6 +1202,7 @@ function bindCameras(root) {
 /* ---------- Gắn sự kiện ---------- */
 function bind(root) {
   bindNet(root);
+  bindQuickWifi(root);
   bindCameras(root);
   $$("[data-go]", root).forEach((b) => (b.onclick = () => go(b.dataset.go)));
   $$("[data-dev]", root).forEach((b) => (b.onclick = (e) => { if (e.target.closest("[data-unblock-dev]")) return; devSheet(b.dataset.dev); }));
