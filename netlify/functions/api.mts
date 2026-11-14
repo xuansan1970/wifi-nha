@@ -197,7 +197,7 @@ export default async (req: Request) => {
 
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules"].includes(path) && !path.startsWith("/net/rules/"))
+    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/cam/config", "/cam/log"].includes(path) && !path.startsWith("/net/rules/"))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -256,9 +256,8 @@ export default async (req: Request) => {
     }
     if (path === "/log") return json({ log: await getLog() })
 
-    // ---- Camera WebRTC (go2rtc, chỉ Xuân San) ----
+    // ---- Camera WebRTC (go2rtc: admin + ba mẹ đều xem được, chỉ Xuân San chỉnh gateway) ----
     if (path === "/cam/config" && m === "GET") {
-      needAdmin(s)
       const cfg = await getJSON<{ gatewayUrl?: string }>("cam_config", {})
       const gatewayUrl = (cfg.gatewayUrl || process.env.CAM_GATEWAY_URL || "").replace(/\/$/, "")
       return json({ gatewayUrl })
@@ -270,6 +269,12 @@ export default async (req: Request) => {
       await setJSON("cam_config", { gatewayUrl: raw })
       await L([{ t: Date.now(), ok: true, by: s.name, text: raw ? `Cập nhật Camera Gateway: ${raw}` : "Xoá Camera Gateway" }])
       return json({ ok: true, gatewayUrl: raw })
+    }
+    if (path === "/cam/log" && m === "POST") {
+      const text = String(body.text || "").trim().slice(0, 160)
+      if (!text) throw new Http(400, "Thiếu nội dung nhật ký")
+      await L([{ t: Date.now(), ok: true, by: s.name, text }])
+      return json({ ok: true })
     }
 
     // ---- chặn / mở (Ba Mẹ cũng dùng được) ----
