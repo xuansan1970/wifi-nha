@@ -351,11 +351,16 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .meta.sch{display:flex;align-items:flex-start;gap:6px;margin-top:4px;font-size:12.5px;line-height:1.4}
 .meta.sch svg.i{width:14px;height:14px;margin-top:2px;flex:none}
 .gw-card summary::-webkit-details-marker{display:none}
-/* ---- Chạy trong app tổng Nhà Mình (điện thoại): app tổng đã có thanh tên app → thu gọn thanh trên, đỡ tốn chỗ ---- */
+/* ---- Chạy trong app tổng Nhà Mình (điện thoại): app tổng đã có thanh tên app → bỏ thanh trên riêng,
+   chỉ giữ các nút (đổi giao diện, chuông, tải lại) nổi ở góc phải, ngang hàng tiêu đề trang ---- */
 @media (max-width:719px){
-  .embed .mtop{padding:6px var(--gr) 6px var(--gx);min-height:48px}
-  .embed .mtop img{display:none}
-  .embed .mtop b{font-size:15px;color:var(--mut);font-weight:600}
-  .embed .main{padding-top:8px}
+  .embed .mtop{position:absolute;top:10px;right:var(--gr);left:auto;padding:0;min-height:0;gap:2px;background:none!important;border:0!important;backdrop-filter:none;-webkit-backdrop-filter:none;z-index:31}
+  .embed .mtop img,.embed .mtop b{display:none}
+  .embed .main{padding-top:14px}
+  .embed .top{padding-right:132px;min-height:44px}
 }
 .net-g .opt{white-space:nowrap;padding-left:8px;padding-right:8px}
+/* Điện thoại: ô trống gọn hơn, đỡ tốn chỗ */
+@media (max-width:719px){.empty{padding:14px 12px;font-size:13.5px}.empty b{font-size:14.5px;margin-bottom:2px}}
+/* Thẻ nằm trong lưới: lưới đã có khoảng cách → bỏ lề dưới riêng để không bị gấp đôi */
+.grid > .card{margin-bottom:0!important}
