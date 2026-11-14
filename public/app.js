@@ -291,7 +291,7 @@ function vHome() {
 const kpi = (ic, l, n, d, c) => `<div class="kpi"><div class="l"><span style="color:${c}">${ic}</span>${l}</div><div class="n">${n}</div><div class="d">${d}</div></div>`;
 function routerCard(r) {
   const d = r.device || {};
-  const ssOn = r.ssids.filter((s) => s.enable).length;
+  const ssOn = r.ssids.filter((s) => onAir(s)).length;
   return `<div class="card rt">
     <div class="rt-h"><div class="floor-ic" style="background:${floorC(r.floor)}">${I.router}</div><div class="t"><b>${esc(r.floor)}</b><div class="meta nowrap">${esc(r.name)} · ${esc(d.model || "—")}</div></div>
       <span class="chip ${r.online ? "ok" : "bad"}"><span class="dot"></span>${r.online ? "Online" : "Offline"}</span></div>
@@ -432,7 +432,7 @@ function vWifi() {
   <div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><div><h2>${esc(r.floor)}</h2><small>${esc(r.name)}</small></div></div>
     <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""}${s.private ? ` · <span class="chip pri" style="height:20px">Riêng của bạn</span>` : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div>
       <div style="display:flex"><button class="btn ghost sm icon" data-wedit="${s.id}" data-gid="${r.gid}" aria-label="Cài đặt">${I.gear}</button><button class="btn ghost sm icon" data-wdel="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" aria-label="Xoá">${I.trash}</button></div>
-      <button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot ? 1 : 0}"></button>${s.schedule ? `<div style="grid-column:1/-1;margin-top:-4px">${schLine(s)}</div>` : ""}</div>`).join("") || '<div class="empty">Không đọc được WiFi</div>'}</div></div>`).join("")}</div>`;
+      <button class="sw ${onAir(s) ? "on" : ""}${offBySched(s) ? " sched" : ""}" role="switch" aria-checked="${onAir(s)}" data-sched="${offBySched(s) ? 1 : 0}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot ? 1 : 0}"></button>${s.schedule ? `<div style="grid-column:1/-1;margin-top:-4px">${schLine(s)}</div>` : ""}</div>`).join("") || '<div class="empty">Không đọc được WiFi</div>'}</div></div>`).join("")}</div>`;
 }
 function wifiCreateSheet() {
   sheet(`<div class="grab"></div><div class="sheet-h"><div class="t"><h3>Tạo WiFi mới</h3><p>Router áp dụng trong khoảng 30–60 giây.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
@@ -478,6 +478,9 @@ function schState(sch, ms = Date.now()) {
   return { air, next: null };
 }
 function dayLbl(i) { return i === 0 ? "hôm nay" : i === 1 ? "ngày mai" : DAYS[(vnNow().dow + i) % 7]; }
+// WiFi "đang phát thật": được bật VÀ đang trong giờ phát của router (time limit eWeb)
+function offBySched(s) { return !!(s.enable && s.schedule && !schState(s.schedule.days).air); }
+function onAir(s) { return !!s.enable && !offBySched(s); }
 function schLine(s) {
   if (!s.schedule) return "";
   const st = schState(s.schedule.days);
@@ -781,7 +784,7 @@ function parentBlockSheet(mac, name) {
 }
 function vWifiParent() {
   return header("WiFi") + `<div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><h2>${esc(r.floor)}</h2><div class="grow"></div>${r.online ? "" : '<span class="chip bad">Offline</span>'}</div>
-    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.enable ? "Đang bật" : "Đang tắt"} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div><button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="0"></button>${s.schedule ? `<div style="grid-column:1/-1;margin-top:-4px">${schLine(s)}</div>` : ""}</div>`).join("") || '<div class="meta">Không có WiFi</div>'}</div></div>`).join("")}</div>`;
+    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${offBySched(s) ? "Tắt theo lịch" : s.enable ? "Đang bật" : "Đang tắt"} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div><button class="sw ${onAir(s) ? "on" : ""}${offBySched(s) ? " sched" : ""}" role="switch" aria-checked="${onAir(s)}" data-sched="${offBySched(s) ? 1 : 0}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="0"></button>${s.schedule ? `<div style="grid-column:1/-1;margin-top:-4px">${schLine(s)}</div>` : ""}</div>`).join("") || '<div class="meta">Không có WiFi</div>'}</div></div>`).join("")}</div>`;
 }
 
 /* ---------- Sheet chung ---------- */
@@ -1180,6 +1183,11 @@ function bind(root) {
   // wifi
   const wa = $("#wadd"); if (wa) wa.onclick = wifiCreateSheet;
   $$("[data-wt]", root).forEach((b) => (b.onclick = async () => {
+    if (b.dataset.sched === "1") {
+      const ss = S.d.routers.find((r) => r.gid === Number(b.dataset.gid))?.ssids.find((x) => x.id === Number(b.dataset.wt));
+      const st = ss?.schedule ? schState(ss.schedule.days) : null;
+      return confirmBox(`“${esc(b.dataset.name)}” đang tắt theo lịch`, `Router tự tắt WiFi này ngoài khung giờ <b>${esc(schSummary(ss?.schedule?.days))}</b>${st?.next ? `, tự mở lại lúc <b>${st.next.hm}</b> ${dayLbl(st.next.day)}` : ""}.<br><br>Muốn dùng ngay bây giờ thì phải sửa time limit trong eWeb.`, "Đã hiểu");
+    }
     const on = b.classList.contains("on");
     if (on && !(await confirmBox(`Tắt “${esc(b.dataset.name)}”?`, b.dataset.iot === "1" ? "<b>Đây là WiFi IoT</b> — camera, hub, quạt… dùng mạng này sẽ mất kết nối." : "Thiết bị đang dùng WiFi này sẽ mất kết nối tới khi bật lại.", "Tắt WiFi", true))) return;
     b.classList.add("busy"); b.classList.toggle("on", !on);
