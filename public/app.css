@@ -265,5 +265,6 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 /* Thẻ router: đủ rộng thì 3 cột, hẹp thì tự xuống 2 / 1 cột */
 .grid.routers{grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
 /* Nhãn Netlify không được che thanh tab trên điện thoại */
-@media (max-width:719px){#nl-badge-frame{bottom:calc(78px + env(safe-area-inset-bottom))!important}}
+#nl-badge-frame{z-index:20!important}
+@media (max-width:719px){#nl-badge-frame{bottom:auto!important;top:calc(env(safe-area-inset-top) + 56px)!important;transform:scale(.8);transform-origin:top right;opacity:.85}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
