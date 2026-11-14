@@ -104,7 +104,7 @@ export function macsOf(t: Target, meta: Meta) {
 export function labelOf(t: Target, s: State, devices: Record<string, Dev>, meta: Meta) {
   if (t.kind === "person") return s.people.find((p) => p.id === t.id)?.name ?? "Người dùng"
   const k = R.macKey(t.id)
-  return meta[k]?.custom || devices[k]?.name || t.id
+  return meta[k]?.custom || devices[k]?.name || R.macColon(k)
 }
 
 export async function blockMacs(macs: string[], gids: number[]) {
