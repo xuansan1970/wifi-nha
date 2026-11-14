@@ -60,6 +60,16 @@ async function build(): Promise<Snapshot> {
         vlan: s.vlanId,
         isolation: s.l2iso === true || s.l2iso === "true",
         bandSteering: s.bandSelectEnable === true || s.bandSelectEnable === "true",
+        isolation2: s.isGuest === true || s.isGuest === "true",
+        fastRoaming: Number(s.ftEnable) === 1,
+        gaming: String(s.xpressEnable) === "true",
+        standard: s.wirelessModeType || "",
+        usersLimit: Number(s.usersLimit) || 0,
+        upRate: s.upRate || "",
+        downRate: s.downRate || "",
+        wlanUpRate: s.wlanUpRate || "",
+        wlanDownRate: s.wlanDownRate || "",
+        schedule: R.parseTmngt(s.tmngt),
       }))
       const cl = clients.map((c: any) => {
         const reg = devices[c.mac]

@@ -239,6 +239,52 @@ export default async (req: Request) => {
       await buildSnapshot().catch(() => {})
       return json({ ok: true, errors: errs })
     }
+    if (path === "/wifi/update" && m === "POST") {
+      const gid = Number(body.gid)
+      if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      const p: R.SsidPatch = {}
+      if (body.name !== undefined) {
+        const n = String(body.name).trim()
+        if (!n || Buffer.byteLength(n) > 32) throw new Http(400, "Tên WiFi 1–32 ký tự")
+        p.name = n
+      }
+      if (body.password) {
+        const pw = String(body.password)
+        if (pw.length < 8 || pw.length > 63) throw new Http(400, "Mật khẩu WiFi 8–63 ký tự")
+        p.password = pw
+      }
+      if (Array.isArray(body.bands)) {
+        const b = body.bands.filter((x: string) => ["2.4G", "5G"].includes(x))
+        if (!b.length) throw new Http(400, "Chọn ít nhất 1 băng tần")
+        p.bands = b
+      }
+      for (const k of ["hidden", "isolation", "bandSteering", "fastRoaming", "gaming"] as const)
+        if (typeof body[k] === "boolean") p[k] = body[k]
+      if (["auto", "wifi6", "wifi5", "wifi4"].includes(body.standard)) p.standard = body.standard
+      if (body.usersLimit !== undefined) {
+        const u = Math.round(Number(body.usersLimit))
+        if (!(u >= 0 && u <= 256)) throw new Http(400, "Giới hạn số máy 0–256")
+        p.usersLimit = u
+      }
+      for (const k of ["upRate", "downRate", "wlanUpRate", "wlanDownRate"] as const)
+        if (body[k] !== undefined) {
+          const v = String(body[k]).trim()
+          if (v && !/^\d{1,7}$/.test(v)) throw new Http(400, "Giới hạn tốc độ phải là số (kbps)")
+          p[k] = v
+        }
+      await R.updateSsid(gid, Number(body.ssidId), p)
+      const changed = Object.keys(p).map((k) => (k === "password" ? "mật khẩu" : k === "name" ? "tên" : k)).join(", ")
+      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Sửa WiFi “${String(body.oldName || body.ssidId)}” (${changed || "không đổi"})` }])
+      await buildSnapshot().catch(() => {})
+      return json({ ok: true })
+    }
+    if (path === "/wifi/secret" && m === "POST") {
+      const gid = Number(body.gid)
+      if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      const { raw } = await R.ssidRaw(gid, Number(body.ssidId))
+      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Xem mật khẩu WiFi “${raw.ssidName}”` }])
+      return json({ password: raw.password ?? "" })
+    }
     if (path === "/wifi/delete" && m === "POST") {
       const gid = Number(body.gid)
       if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")

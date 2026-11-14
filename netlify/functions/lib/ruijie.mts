@@ -415,3 +415,65 @@ export async function clientsRaw(gid: number) {
   })
   return j.list ?? []
 }
+
+// ---------- Sửa chi tiết 1 WiFi (giống form "Edit Wi-Fi" của Ruijie) ----------
+export async function ssidRaw(gid: number, ssidId: number) {
+  const tid = await templateId(gid)
+  const j = await call("/conf/wifi_grp/wifi", "GET", { querys: { group_id: gid, conf_template_id: tid } })
+  const raw = (j.data?.ssidList ?? []).find((s: any) => Number(s.id) === Number(ssidId))
+  if (!raw) throw new RuijieError("Không tìm thấy WiFi này (có thể vừa bị xoá)")
+  return { tid, raw }
+}
+
+export type SsidPatch = {
+  name?: string
+  password?: string
+  bands?: string[]
+  hidden?: boolean
+  isolation?: boolean
+  bandSteering?: boolean
+  fastRoaming?: boolean
+  gaming?: boolean
+  standard?: string
+  usersLimit?: number
+  upRate?: string
+  downRate?: string
+  wlanUpRate?: string
+  wlanDownRate?: string
+}
+
+export async function updateSsid(gid: number, ssidId: number, p: SsidPatch) {
+  const { tid, raw } = await ssidRaw(gid, ssidId)
+  const e: any = { ...raw }
+  delete e.encryptionModeDesc
+  if (p.name !== undefined) e.ssidName = p.name
+  if (p.password !== undefined && p.password !== "") e.password = p.password
+  if (p.bands) e.relatedRadio = p.bands.map((b) => (b === "5G" ? "2" : b === "6G" ? "3" : "1")).sort().join(",")
+  if (p.hidden !== undefined) e.ishidden = p.hidden
+  if (p.isolation !== undefined) e.isGuest = p.isolation
+  if (p.bandSteering !== undefined) e.bandSelectEnable = p.bandSteering
+  if (p.fastRoaming !== undefined) e.ftEnable = p.fastRoaming ? 1 : 0
+  if (p.gaming !== undefined) e.xpressEnable = p.gaming ? "true" : "false"
+  // Form gốc của Ruijie gửi "auto" cho WiFi đang lưu "wifi6" — làm y hệt để không đổi chuẩn ngoài ý muốn
+  if (e.wirelessModeType === "wifi6") e.wirelessModeType = "auto"
+  if (p.usersLimit !== undefined) e.usersLimit = p.usersLimit
+  for (const k of ["upRate", "downRate", "wlanUpRate", "wlanDownRate"] as const) if (p[k] !== undefined) e[k] = p[k]
+  for (const k of ["upRate", "downRate", "wlanUpRate", "wlanDownRate"]) if (e[k] === undefined) e[k] = ""
+  e.encryptionType = String(e.encryptionMode || "").startsWith("wpa") ? "wpa" : e.encryptionType ?? "open"
+  e.effectRange = e.effectRange ?? 0
+  e.serverGrpId = e.serverGrpId ?? ""
+  await call("/conf/template/ssid", "POST", {
+    params: { confTemplateId: tid, ssidId: Number(ssidId), groupId: gid, wifiGrpSsid: false, wirelessConfEntity: e },
+  })
+}
+
+// Bảng giờ phát WiFi tích hợp của router (tmngt) → dạng dễ đọc
+export function parseTmngt(t: any) {
+  if (!t?.text) return null
+  try {
+    const o = JSON.parse(t.text)
+    return { mode: t.tmmode, days: o }
+  } catch {
+    return null
+  }
+}

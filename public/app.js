@@ -397,7 +397,7 @@ function vWifi() {
   <div class="alert">${I.eye}<div>WiFi <b>ẩn</b> (IoT cho camera, hub…) vẫn hoạt động bình thường, chỉ không hiện khi dò WiFi. Tắt nhầm WiFi IoT sẽ làm camera mất kết nối.</div></div>
   <div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><div><h2>${esc(r.floor)}</h2><small>${esc(r.name)}</small></div></div>
     <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div>
-      <button class="btn ghost sm icon" data-wdel="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" aria-label="Xoá">${I.trash}</button>
+      <div style="display:flex"><button class="btn ghost sm icon" data-wedit="${s.id}" data-gid="${r.gid}" aria-label="Cài đặt">${I.gear}</button><button class="btn ghost sm icon" data-wdel="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" aria-label="Xoá">${I.trash}</button></div>
       <button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot ? 1 : 0}"></button></div>`).join("") || '<div class="empty">Không đọc được WiFi</div>'}</div></div>`).join("")}</div>`;
 }
 function wifiCreateSheet() {
@@ -415,6 +415,47 @@ function wifiCreateSheet() {
     await api("/wifi/create", { timeout: 60000, body: { name: $("#wn").value.trim(), password: $("#wp").value, bands: $$("#wb .opt.on").map((b) => b.dataset.b), gids: $$("[data-wg]:checked").map((c) => Number(c.dataset.wg)), hidden: $("#wh").checked, isolation: $("#wi").checked } });
     closeSheet(); await load();
   }, "Đã tạo WiFi").catch(() => {});
+}
+
+const DAYK = [["mon", "T2"], ["tue", "T3"], ["wed", "T4"], ["thu", "T5"], ["fri", "T6"], ["sat", "T7"], ["sun", "CN"]];
+function wifiEditSheet(gid, id) {
+  const r = S.d.routers.find((x) => x.gid === gid); const w = r?.ssids.find((x) => x.id === id);
+  if (!w) return toast("Không tìm thấy WiFi", 1);
+  const sw = (k, on, label, hint) => `<label class="chk"><input type="checkbox" data-k="${k}" ${on ? "checked" : ""}><div><div>${label}</div>${hint ? `<div class="meta" style="font-size:12px">${hint}</div>` : ""}</div></label>`;
+  const sch = w.schedule?.days;
+  sheet(`<div class="grab"></div><div class="sheet-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:44px;height:44px">${I.wifi}</span><div class="t"><h3>${esc(w.name)}</h3><p>${esc(r.floor)} · ${w.enable ? "đang bật" : "đang tắt"}${w.hidden ? " · ẩn" : ""}</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
+    <div class="field"><label class="lbl">Tên WiFi</label><input class="inp" id="en" maxlength="32" value="${esc(w.name)}"></div>
+    <div class="field"><label class="lbl">Mật khẩu mới</label><div style="display:flex;gap:8px"><input class="inp" id="ep" maxlength="63" autocomplete="new-password" placeholder="Để trống = giữ mật khẩu cũ"><button class="btn" id="eshow" type="button">${I.eye}<span class="hide-m">Xem hiện tại</span></button></div><div class="hint" id="ecur"></div></div>
+    <div class="field"><label class="lbl">Băng tần</label><div class="opts" id="eb">${["2.4G", "5G"].map((b) => `<button class="opt ${w.bands.includes(b) ? "on" : ""}" data-b="${b}">${b}</button>`).join("")}</div></div>
+    <div class="lbl">Nâng cao</div>
+    ${sw("hidden", w.hidden, "Ẩn WiFi", "Không hiện khi dò WiFi — dùng cho mạng IoT")}
+    ${sw("isolation", w.isolation2, "Cách ly thiết bị", "Các máy trong mạng không thấy nhau (hợp với khách / IoT)")}
+    ${sw("bandSteering", w.bandSteering, "Band steering", "Tự đẩy máy mạnh lên 5G")}
+    ${sw("fastRoaming", w.fastRoaming, "Chuyển vùng nhanh (802.11r)", "Đi giữa các tầng ít bị rớt — một số máy cũ không hỗ trợ")}
+    ${sw("gaming", w.gaming, "Ưu tiên chơi game", "Giảm trễ cho game, có thể ảnh hưởng xem video")}
+    <div class="field" style="margin-top:12px"><div><label class="lbl">Tối đa số máy</label><input class="inp" id="eul" type="number" min="0" max="256" inputmode="numeric" value="${w.usersLimit || ""}" placeholder="0 = không giới hạn"></div></div>
+    <div class="field two"><div><label class="lbl">Mỗi máy · tải xuống (kbps)</label><input class="inp" id="edr" inputmode="numeric" value="${esc(w.downRate)}" placeholder="Không giới hạn"></div><div><label class="lbl">Mỗi máy · tải lên (kbps)</label><input class="inp" id="eur" inputmode="numeric" value="${esc(w.upRate)}" placeholder="Không giới hạn"></div></div>
+    <div class="field two"><div><label class="lbl">Cả mạng · tải xuống (kbps)</label><input class="inp" id="ewdr" inputmode="numeric" value="${esc(w.wlanDownRate)}" placeholder="Không giới hạn"></div><div><label class="lbl">Cả mạng · tải lên (kbps)</label><input class="inp" id="ewur" inputmode="numeric" value="${esc(w.wlanUpRate)}" placeholder="Không giới hạn"></div></div>
+    ${sch ? `<div class="lbl">Lịch phát WiFi có sẵn trên router</div><div class="tbl-wrap" style="margin-bottom:8px"><table class="tbl"><tbody>${DAYK.map(([k, l]) => `<tr><td><b>${l}</b></td><td>${(sch[k] || []).map((x) => x.join("–")).join(", ") || "—"}</td></tr>`).join("")}</tbody></table></div><div class="hint" style="margin-bottom:8px">Ngoài các khung giờ này router tự tắt WiFi. Muốn khung giờ mới, dùng mục Hẹn giờ.</div>` : ""}
+    <div class="foot"><button class="btn" data-close>Huỷ</button><button class="btn pri" id="esave">Lưu thay đổi</button></div>`);
+  $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
+  $$("#eb .opt").forEach((b) => (b.onclick = () => b.classList.toggle("on")));
+  $("#eshow").onclick = () => act($("#eshow"), async () => { const r2 = await api("/wifi/secret", { body: { gid, ssidId: id } }); $("#ecur").innerHTML = `Mật khẩu hiện tại: <b style="user-select:all">${esc(r2.password || "(không có)")}</b>`; });
+  $("#esave").onclick = async () => {
+    const body = { gid, ssidId: id, oldName: w.name };
+    const nm = $("#en").value.trim(); if (nm !== w.name) body.name = nm;
+    const pw = $("#ep").value; if (pw) body.password = pw;
+    const bands = $$("#eb .opt.on").map((b) => b.dataset.b); if (bands.join() !== w.bands.join()) body.bands = bands;
+    const cur = { hidden: w.hidden, isolation: w.isolation2, bandSteering: w.bandSteering, fastRoaming: w.fastRoaming, gaming: w.gaming };
+    $$("[data-k]", $("#sheet")).forEach((c) => { if (c.checked !== cur[c.dataset.k]) body[c.dataset.k] = c.checked; });
+    const ul = Number($("#eul").value || 0); if (ul !== (w.usersLimit || 0)) body.usersLimit = ul;
+    [["edr", "downRate"], ["eur", "upRate"], ["ewdr", "wlanDownRate"], ["ewur", "wlanUpRate"]].forEach(([el, k]) => { const v = $("#" + el).value.trim(); if (v !== (w[k] || "")) body[k] = v; });
+    if (Object.keys(body).length === 3) return toast("Chưa thay đổi gì");
+    const risky = body.name || body.password || body.bands || body.hidden !== undefined;
+    if (risky && !(await confirmBox("Lưu thay đổi WiFi?", `${body.name || body.password ? "Mọi thiết bị đang dùng mạng này sẽ phải <b>kết nối lại</b>" + (body.password ? " bằng mật khẩu mới" : "") + ". " : ""}${w.iot ? "<b>Đây là WiFi IoT</b> — camera, hub cũng phải cài lại nếu đổi tên/mật khẩu." : ""} Router áp dụng sau ~30–60 giây.`, "Lưu", true))) return wifiEditSheet(gid, id);
+    try { await api("/wifi/update", { body, timeout: 60000 }); toast("Đã lưu — router áp dụng sau ~30–60 giây"); closeSheet(); await load(); }
+    catch (e) { toast(e.message, 1); }
+  };
 }
 
 /* ---------- Trang: Hẹn giờ (admin) ---------- */
@@ -546,6 +587,7 @@ function bind(root) {
     catch (e) { b.classList.toggle("on", on); toast(e.message, 1); }
     b.classList.remove("busy");
   }));
+  $$("[data-wedit]", root).forEach((b) => (b.onclick = () => wifiEditSheet(Number(b.dataset.gid), Number(b.dataset.wedit))));
   $$("[data-wdel]", root).forEach((b) => (b.onclick = async () => {
     if (!(await confirmBox(`Xoá WiFi “${esc(b.dataset.name)}”?`, "Xoá hẳn khỏi router, không khôi phục được. Thiết bị đang dùng mạng này sẽ mất kết nối.", "Xoá WiFi", true))) return;
     act(b, async () => { await api("/wifi/delete", { body: { gid: Number(b.dataset.gid), ssidId: Number(b.dataset.wdel), name: b.dataset.name } }); await load(); }, "Đã xoá WiFi").catch(() => {});
