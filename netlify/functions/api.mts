@@ -8,7 +8,7 @@ import { KIND_VI } from "./lib/smart.mts"
 import {
   addLog, getLog, isIotDevice, isParentHiddenSsid, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
-import { getJSON, setJSON } from "./lib/store.mts"
+import { envGet, getJSON, setJSON } from "./lib/store.mts"
 
 const json = (data: any, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
@@ -173,9 +173,9 @@ export default async (req: Request) => {
     if (path === "/health")
       return json({
         ok: true,
-        ruijie: !!(Netlify.env.get("RUIJIE_USER") && Netlify.env.get("RUIJIE_PASS")),
-        users: !!Netlify.env.get("APP_USERS"),
-        secret: !!Netlify.env.get("APP_SECRET"),
+        ruijie: !!(envGet("RUIJIE_USER") && envGet("RUIJIE_PASS")),
+        users: !!envGet("APP_USERS"),
+        secret: !!envGet("APP_SECRET"),
       })
     if (path === "/users" && m === "GET") return json({ users: await publicUsers() })
     if (path === "/login" && m === "POST") {
@@ -259,7 +259,7 @@ export default async (req: Request) => {
     // ---- Camera WebRTC (go2rtc: admin + ba mẹ đều xem được, chỉ Xuân San chỉnh gateway) ----
     if (path === "/cam/config" && m === "GET") {
       const cfg = await getJSON<{ gatewayUrl?: string }>("cam_config", {})
-      const gatewayUrl = (cfg.gatewayUrl || process.env.CAM_GATEWAY_URL || "").replace(/\/$/, "")
+      const gatewayUrl = (cfg.gatewayUrl || envGet("CAM_GATEWAY_URL") || "").replace(/\/$/, "")
       return json({ gatewayUrl })
     }
     if (path === "/cam/config" && m === "POST") {

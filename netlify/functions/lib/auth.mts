@@ -1,5 +1,5 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
-import { getJSON, setJSON } from "./store.mts"
+import { envGet, getJSON, setJSON } from "./store.mts"
 
 export type Role = "admin" | "parent"
 export type User = { id: string; name: string; role: Role; salt: string; hash: string }
@@ -9,7 +9,7 @@ const COOKIE = "wn_sess"
 const TTL: Record<Role, number> = { admin: 60 * 86400_000, parent: 30 * 86400_000 }
 
 function secret() {
-  const s = Netlify.env.get("APP_SECRET")
+  const s = envGet("APP_SECRET")
   if (!s || s.length < 16) throw new Error("Thiếu APP_SECRET")
   return s
 }
@@ -22,7 +22,7 @@ export async function loadUsers(): Promise<User[]> {
   if (cur?.length) {
     // Quyền (role) luôn lấy theo APP_USERS để đổi quyền chỉ cần sửa biến môi trường; PIN giữ nguyên
     const roles = new Map(
-      (Netlify.env.get("APP_USERS") || "").split(";").map((x) => x.split(":")).filter((p) => p.length === 4).map((p) => [p[0], p[2]]),
+      (envGet("APP_USERS") || "").split(";").map((x) => x.split(":")).filter((p) => p.length === 4).map((p) => [p[0], p[2]]),
     )
     let changed = false
     for (const u of cur) {
@@ -35,7 +35,7 @@ export async function loadUsers(): Promise<User[]> {
     if (changed) await setJSON("users", cur)
     return cur
   }
-  const seed = Netlify.env.get("APP_USERS") || ""
+  const seed = envGet("APP_USERS") || ""
   const users: User[] = seed
     .split(";")
     .map((x) => x.split(":"))

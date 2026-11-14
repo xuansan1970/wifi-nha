@@ -1,6 +1,6 @@
 // Ruijie Cloud client — dùng đúng các API mà web cloud-as.ruijienetworks.com đang gọi.
 import { constants, publicEncrypt } from "node:crypto"
-import { store } from "./store.mts"
+import { envGet, store } from "./store.mts"
 
 const BASE = "https://cloud-as.ruijienetworks.com"
 const SERVICE = `${BASE}/webproxy/sso/back?rewrite=off&back=${encodeURIComponent(BASE + "/macc5/adminIntl/#/theme-gateway")}`
@@ -69,9 +69,9 @@ async function req1(jar: Jar, url: string, init: RequestInit = {}) {
 }
 
 async function login(): Promise<Jar> {
-  const user = Netlify.env.get("RUIJIE_USER")
-  const pass = Netlify.env.get("RUIJIE_PASS")
-  if (!user || !pass) throw new RuijieError("Chưa cài RUIJIE_USER / RUIJIE_PASS trong Netlify", "NO_CREDS")
+  const user = envGet("RUIJIE_USER")
+  const pass = envGet("RUIJIE_PASS")
+  if (!user || !pass) throw new RuijieError("Chưa cài RUIJIE_USER / RUIJIE_PASS", "NO_CREDS")
   const jar: Jar = {}
 
   const page = await req(jar, LOGIN_URL)
