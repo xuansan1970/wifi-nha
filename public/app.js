@@ -133,7 +133,17 @@ async function load(mode) {
       S.d = d; S.me = d.me; S.err = null; S.at = Date.now();
     } catch (e) { S.err = e.message; if (!S.d) throw e; }
     finally { inflight = null; }
-    render();
+    if (S.tab === "cameras") {
+      const sub = $(".top .sub");
+      if (sub) {
+        const stale = !S.d || Date.now() - S.d.at > 90000;
+        sub.innerHTML = `<span class="live ${stale || S.err ? "stale" : ""}"></span>${S.err ? esc(S.err) : S.d ? `Cập nhật ${ago(S.d.at)}` : "Đang tải…"}`;
+      }
+      const n = S.d?.blocked?.length || 0;
+      $$('[data-tab="devices"] .badge').forEach((b) => (b.textContent = n));
+    } else {
+      render();
+    }
   })();
   return inflight;
 }
@@ -148,7 +158,7 @@ document.addEventListener("visibilitychange", () => {
   if (S.me.uid !== "san" && S.lastHidden && Date.now() - S.lastHidden > 5 * 60000) { lockNow(); return; }
   if (Date.now() - S.at > 10000) load();
 });
-async function lockNow() { const uid = S.me?.uid; try { await api("/logout", { method: "POST" }); } catch {} S.me = null; S.d = null; renderLogin(uid); }
+async function lockNow() { destroyCamPcs(); toggleWebSiren(false); const uid = S.me?.uid; try { await api("/logout", { method: "POST" }); } catch {} S.me = null; S.d = null; renderLogin(uid); }
 
 /* ---------- Đăng nhập ---------- */
 async function renderLogin(pre) {
@@ -225,7 +235,7 @@ function moreSheet() {
   sheet(`<div class="sheet-h"><div class="t"><h3>Thêm</h3></div></div><div class="list">${ADMIN_TABS.filter((t) => !MOBILE_ADMIN.includes(t[0])).map(([k, l, ic]) => `<button class="row" data-go="${k}"><span class="av soft">${I[ic]}</span><span class="nm">${l}</span>${I.chev}</button>`).join("")}</div>`);
   $$("[data-go]").forEach((b) => (b.onclick = () => { closeSheet(); go(b.dataset.go); }));
 }
-async function refresh(btn) { await act(btn, () => load("force"), "Đã cập nhật dữ liệu mới nhất").catch(() => {}); }
+async function refresh(btn) { await act(btn, async () => { await load("force"); if (S.tab === "cameras") await loadCameras(); }, "Đã cập nhật dữ liệu mới nhất").catch(() => {}); }
 
 function header(title, extra = "") {
   const stale = !S.d || Date.now() - S.d.at > 90000;
@@ -246,10 +256,14 @@ function render() {
   const rf = $("#rf"); if (rf) rf.onclick = () => refresh(rf);
   bind(pg);
   if (keepQ != null) { const q = $("#q"); if (q) { q.focus(); q.setSelectionRange(keepQ, keepQ); } }
-  // cập nhật badge chặn + chuông
+  // cập nhật badge chặn + chuông (không vẽ lại #page để tránh đứt luồng đang xem)
   const n = S.d.blocked.length; $$('[data-tab="devices"] .badge').forEach((b) => (b.textContent = n));
   const u = S.d.notif?.unread || 0;
-  if (isAdmin() && S._unread !== u) { S._unread = u; const keep = $("#page").innerHTML; shell(); $("#page").innerHTML = keep; bind($("#page")); }
+  if (isAdmin() && S._unread !== u) {
+    S._unread = u;
+    const b1 = $("#bell"); if (b1) { let bg = $(".badge", b1); if (u) { if (!bg) { bg = document.createElement("span"); bg.className = "badge"; b1.appendChild(bg); } bg.textContent = u; } else bg?.remove(); }
+    const b2 = $("#bell2"); if (b2) { let bg = $(".badge", b2); if (u) { if (!bg) { bg = document.createElement("span"); bg.className = "badge"; bg.style.cssText = "position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px"; b2.appendChild(bg); } bg.textContent = u; } else bg?.remove(); }
+  }
 }
 
 /* ---------- Trang: Tổng quan (admin) ---------- */
@@ -541,9 +555,9 @@ function vLog() {
   return header("Nhật ký") + `<div class="card">${S.log.length ? `<div class="list fade-list">${S.log.slice(0, 150).map((l) => `<div class="row" style="cursor:default"><span class="av ${l.ok ? "" : ""}" style="background:${l.ok ? "var(--ok-soft)" : "var(--bad-soft)"};color:${l.ok ? "var(--ok)" : "var(--bad)"}">${l.ok ? I.clock : I.alert}</span><div style="min-width:0"><div style="font-weight:500">${esc(l.text)}</div><div class="meta">${esc(l.by)} · ${timeVN(l.t)} · ${ago(l.t)}</div></div><span></span></div>`).join("")}</div>` : `<div class="empty"><b>Chưa có hoạt động</b>Mọi thao tác bấm tay và hẹn giờ sẽ ghi ở đây.</div>`}</div>`;
 }
 function vSettings() {
-  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — bật/tắt mạng, hẹn giờ, cho dùng thêm, xem và khoá máy"}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${S.me.uid !== "san" ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
-  ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Mã PIN</h2></div><p class="meta" style="margin-bottom:12px">Nên đổi PIN khác năm sinh để các em không đoán được.</p><div id="acc" class="list"><div class="meta">Đang tải…</div></div></div>
-  <div class="card"><div class="card-h"><h2>Cài lên màn hình chính</h2></div><p class="meta">iPhone: Safari → Chia sẻ → <b>Thêm vào MH chính</b>. Android: Chrome → ⋮ → <b>Cài đặt ứng dụng</b>. Mở như app, toàn màn hình.</p></div>` : ""}</div>`;
+  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — bật/tắt mạng, hẹn giờ, cho dùng thêm, khoá máy & xem Camera"}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${S.me.uid !== "san" ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
+  ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Mã PIN</h2></div><p class="meta" style="margin-bottom:12px">Nên đổi PIN khác năm sinh để các em không đoán được.</p><div id="acc" class="list"><div class="meta">Đang tải…</div></div></div>` : ""}
+  <div class="card"><div class="card-h"><h2>Cài lên màn hình chính</h2></div><p class="meta">iPhone: Safari → Chia sẻ → <b>Thêm vào MH chính</b>. Android: Chrome → ⋮ → <b>Cài đặt ứng dụng</b>. Mở như app, toàn màn hình.</p></div></div>`;
 }
 async function loadAccounts() {
   try { const { users } = await api("/accounts"); const el = $("#acc"); if (!el) return;
@@ -560,7 +574,7 @@ function pinSheet(uid, name) {
 /* ---------- Thông báo (admin): mọi thao tác của Ba Mẹ ---------- */
 function notifSheet() {
   const n = S.d?.notif || { items: [], seen: 0 };
-  sheet(`<div class="grab"></div><div class="sheet-h"><span class="av" style="background:var(--pri)">${I.bell}</span><div class="t"><h3>Thông báo</h3><p>Ba Mẹ đăng nhập, khoá/mở mạng, bật/tắt WiFi</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
+  sheet(`<div class="grab"></div><div class="sheet-h"><span class="av" style="background:var(--pri)">${I.bell}</span><div class="t"><h3>Thông báo</h3><p>Ba Mẹ đăng nhập, khoá/mở mạng, bật/tắt WiFi, xem Camera</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
     ${n.items.length ? `<div class="list">${n.items.map((l) => `<div class="row" style="cursor:default"><span class="av round" style="background:${l.by === "Ba" ? "#f97316" : l.by === "Mẹ" ? "#10b981" : "#94a3b8"}">${esc(ini(l.by))}</span><div style="min-width:0"><div style="font-weight:${l.t > n.seen ? 700 : 500}">${esc(l.text)}</div><div class="meta">${esc(l.by)} · ${timeVN(l.t)} · ${ago(l.t)}</div></div>${l.t > n.seen ? '<span class="dot" style="color:var(--pri)"></span>' : "<span></span>"}</div>`).join("")}</div>`
       : `<div class="empty"><b>Chưa có thông báo</b>Khi Ba hoặc Mẹ đăng nhập hay thao tác, anh sẽ thấy ở đây.</div>`}`);
   $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
@@ -676,7 +690,10 @@ function vParentHome() {
   <div class="card"><div class="card-h"><h2>Đang vào mạng</h2><div class="grow"></div><span class="chip ok">${cl.length} máy</span></div>
     ${kinds.length ? `<div class="kinds">${kinds.map(([k, v]) => `<div class="kind"><span class="av soft">${kindIc(k)}</span><b class="num">${v.n}</b><span>${esc(v.vi)}</span></div>`).join("")}</div>` : `<div class="empty">Chưa có máy nào đang vào mạng</div>`}
     ${nb ? `<div class="alert bad" style="margin:12px 0 0">${I.lock}<div><b>${nb} máy đang bị khoá</b></div></div>` : ""}
-    <button class="btn" data-go="devices" style="width:100%;margin-top:12px">${I.devices}Xem từng máy, khoá / mở</button></div></div>`;
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+      <button class="btn" data-go="devices">${I.devices}Xem máy</button>
+      <button class="btn pri" data-go="cameras">${I.camera}Xem Camera</button>
+    </div></div></div>`;
 }
 function vParentDevices() {
   const bs = blockedSet();
@@ -695,7 +712,7 @@ function parentBlockSheet(mac, name) {
   bindBlockOpts({ kind: "device", id: mac }, name);
 }
 function vWifiParent() {
-  return header("WiFi") + `<div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><h2>${esc(r.floor)}</h2></div>
+  return header("WiFi") + `<div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><h2>${esc(r.floor)}</h2><div class="grow"></div>${r.online ? "" : '<span class="chip bad">Offline</span>'}</div>
     <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.enable ? "Đang bật" : "Đang tắt"} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div><button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="0"></button></div>`).join("") || '<div class="meta">Không có WiFi</div>'}</div></div>`).join("")}</div>`;
 }
 
@@ -1021,7 +1038,6 @@ function vCameras() {
         <div class="card cam-card">
           <div class="cam-h">
             <b>${esc(CAM_NAMES[src] || src)}</b>
-            <div class="grow"></div>
             <button class="chip warn" id="cam-st-${esc(src)}" data-cam-retry="${esc(src)}" title="Bấm để nối lại" style="cursor:pointer;border:0"><span class="dot"></span>Đang nối…</button>
           </div>
           <div class="cam-box" id="cam-box-${esc(src)}"><span>Đang khởi tạo…</span></div>
@@ -1043,7 +1059,11 @@ function vCameras() {
 
 function bindCameras(root) {
   const sr = $("#cam-siren", root);
-  if (sr) sr.onclick = () => { toggleWebSiren(!S.cam.alarmOn); render(); mountWebRtcAll(); };
+  if (sr) sr.onclick = () => {
+    toggleWebSiren(!S.cam.alarmOn);
+    sr.className = `btn sm ${S.cam.alarmOn ? "red" : ""}`;
+    sr.innerHTML = `${I.alert}${S.cam.alarmOn ? "Tắt còi" : "Phát còi"}`;
+  };
   const gf = $("#cam-gw-form", root);
   if (gf) gf.onsubmit = async (e) => {
     e.preventDefault();
