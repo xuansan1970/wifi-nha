@@ -8,7 +8,7 @@ import { KIND_VI } from "./lib/smart.mts"
 import {
   addLog, getLog, isIotDevice, isParentHiddenSsid, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
-import { envGet, getJSON, setJSON } from "./lib/store.mts"
+import { cacheGet, cachePut, envGet, getJSON, isKvLimit, setJSON } from "./lib/store.mts"
 
 const json = (data: any, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
@@ -162,6 +162,12 @@ async function view(snapMaxAge: number, s: Session) {
   }
 }
 
+// Link gateway camera: lấy bản mới hơn giữa Cache API và KV
+async function camConfig(): Promise<{ gatewayUrl?: string; at?: number }> {
+  const [c, k] = await Promise.all([cacheGet<any>("cam_config"), getJSON<any>("cam_config", {})])
+  return c && (c.at ?? 0) >= (k?.at ?? 0) ? c : k || {}
+}
+
 export default async (req: Request) => {
   const url = new URL(req.url)
   const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/"
@@ -194,6 +200,22 @@ export default async (req: Request) => {
       })
     }
     if (path === "/logout") return json({ ok: true }, 200, { "Set-Cookie": clearCookie })
+    // Máy chạy go2rtc tự báo link tunnel mới (trycloudflare đổi link mỗi lần khởi động) — xác thực bằng secret CAM_TOKEN
+    if (path === "/cam/gateway" && m === "POST") {
+      const tok = envGet("CAM_TOKEN") || ""
+      if (!tok || req.headers.get("x-cam-token") !== tok) return json({ error: "Sai token" }, 401)
+      const raw = String(body.gatewayUrl || "").trim().replace(/\/$/, "")
+      if (!/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/.test(raw) && !/^https:\/\/[a-z0-9.-]+$/.test(raw)) return json({ error: "URL không hợp lệ" }, 400)
+      const cur = await camConfig()
+      const changed = cur.gatewayUrl !== raw
+      const next = { gatewayUrl: raw, at: Date.now() }
+      await cachePut("cam_config", next, 7 * 86400)
+      if (changed) {
+        await setJSON("cam_config", next).catch((e) => { if (!isKvLimit(e)) throw e })
+        await addLog([{ t: Date.now(), ok: true, by: "Hệ thống", role: "system", text: `Camera Gateway tự cập nhật: ${raw}` }]).catch(() => {})
+      }
+      return json({ ok: true, changed })
+    }
 
     // ---------- cần đăng nhập ----------
     const s = await readSession(req)
@@ -262,7 +284,7 @@ export default async (req: Request) => {
 
     // ---- Camera WebRTC (go2rtc: admin + ba mẹ đều xem được, chỉ Xuân San chỉnh gateway) ----
     if (path === "/cam/config" && m === "GET") {
-      const cfg = await getJSON<{ gatewayUrl?: string }>("cam_config", {})
+      const cfg = await camConfig()
       const gatewayUrl = (cfg.gatewayUrl || envGet("CAM_GATEWAY_URL") || "").replace(/\/$/, "")
       return json({ gatewayUrl })
     }
@@ -270,7 +292,9 @@ export default async (req: Request) => {
       needAdmin(s)
       const raw = String(body.gatewayUrl || "").trim().replace(/\/$/, "")
       if (raw && !/^https?:\/\/.+/.test(raw)) throw new Http(400, "URL gateway phải bắt đầu bằng https:// hoặc http://")
-      await setJSON("cam_config", { gatewayUrl: raw })
+      const next = { gatewayUrl: raw, at: Date.now() }
+      await cachePut("cam_config", next, 7 * 86400)
+      await setJSON("cam_config", next)
       await L([{ t: Date.now(), ok: true, by: s.name, text: raw ? `Cập nhật Camera Gateway: ${raw}` : "Xoá Camera Gateway" }])
       return json({ ok: true, gatewayUrl: raw })
     }

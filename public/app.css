@@ -350,3 +350,12 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .row .nm .chip{flex-shrink:0}
 .meta.sch{display:flex;align-items:flex-start;gap:6px;margin-top:4px;font-size:12.5px;line-height:1.4}
 .meta.sch svg.i{width:14px;height:14px;margin-top:2px;flex:none}
+.gw-card summary::-webkit-details-marker{display:none}
+/* ---- Chạy trong app tổng Nhà Mình (điện thoại): app tổng đã có thanh tên app → thu gọn thanh trên, đỡ tốn chỗ ---- */
+@media (max-width:719px){
+  .embed .mtop{padding:6px var(--gr) 6px var(--gx);min-height:48px}
+  .embed .mtop img{display:none}
+  .embed .mtop b{font-size:15px;color:var(--mut);font-weight:600}
+  .embed .main{padding-top:8px}
+}
+.net-g .opt{white-space:nowrap;padding-left:8px;padding-right:8px}

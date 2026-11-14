@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script>
-(()=>{try{const q=new URLSearchParams(location.search).get("theme");const t=(q==="light"||q==="dark")?q:(localStorage.getItem("nm_theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"));document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;localStorage.setItem("nm_theme",t)}catch(e){}})();
+(()=>{try{const q=new URLSearchParams(location.search).get("theme");const t=(q==="light"||q==="dark")?q:(localStorage.getItem("nm_theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"));document.documentElement.dataset.theme=t;if(window.parent!==window)document.documentElement.classList.add("embed");document.documentElement.style.colorScheme=t;localStorage.setItem("nm_theme",t)}catch(e){}})();
 </script>
 <link rel="stylesheet" href="/app.css">
 </head>

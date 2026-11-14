@@ -430,9 +430,9 @@ function vWifi() {
   return header("Mạng WiFi", `<button class="btn pri" id="wadd">${I.plus}<span>Tạo WiFi</span></button>`) + `
   <div class="alert">${I.eye}<div>WiFi <b>ẩn</b> (IoT cho camera, hub…) vẫn hoạt động bình thường, chỉ không hiện khi dò WiFi. Tắt nhầm WiFi IoT sẽ làm camera mất kết nối.</div></div>
   <div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><div><h2>${esc(r.floor)}</h2><small>${esc(r.name)}</small></div></div>
-    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""}${s.private ? ` · <span class="chip pri" style="height:20px">Riêng của bạn</span>` : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div>${schLine(s)}</div>
+    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""}${s.private ? ` · <span class="chip pri" style="height:20px">Riêng của bạn</span>` : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div>
       <div style="display:flex"><button class="btn ghost sm icon" data-wedit="${s.id}" data-gid="${r.gid}" aria-label="Cài đặt">${I.gear}</button><button class="btn ghost sm icon" data-wdel="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" aria-label="Xoá">${I.trash}</button></div>
-      <button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot ? 1 : 0}"></button></div>`).join("") || '<div class="empty">Không đọc được WiFi</div>'}</div></div>`).join("")}</div>`;
+      <button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot ? 1 : 0}"></button>${s.schedule ? `<div style="grid-column:1/-1;margin-top:-4px">${schLine(s)}</div>` : ""}</div>`).join("") || '<div class="empty">Không đọc được WiFi</div>'}</div></div>`).join("")}</div>`;
 }
 function wifiCreateSheet() {
   sheet(`<div class="grab"></div><div class="sheet-h"><div class="t"><h3>Tạo WiFi mới</h3><p>Router áp dụng trong khoảng 30–60 giây.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
@@ -555,7 +555,7 @@ function ruleDesc(r) {
 }
 function vRules() {
   const R = S.d.rules;
-  return header("Hẹn giờ", `<button class="btn pri" id="radd">${I.plus}<span>Thêm lịch</span></button>`) + `<div class="alert" style="background:var(--pri-soft);color:#1e3a8a">${I.clock}<div>Lịch chạy trên máy chủ mỗi phút theo giờ Việt Nam — vẫn chạy khi điện thoại, MacBook tắt.</div></div>
+  return header("Hẹn giờ", `<button class="btn pri" id="radd">${I.plus}<span>Thêm lịch</span></button>`) + `<div class="alert" style="background:var(--pri-soft);color:var(--text2)">${I.clock}<div>Lịch chạy trên máy chủ mỗi phút theo giờ Việt Nam — vẫn chạy khi điện thoại, MacBook tắt.</div></div>
   ${routerSchedCard()}${R.length ? `<div class="grid g2 fade-list">${R.map((r) => { const [l, ic, c] = RT[r.type]; return `<div class="card" style="opacity:${r.enabled ? 1 : .55};display:flex;gap:14px;align-items:flex-start"><span class="floor-ic" style="background:${c}">${I[ic]}</span><div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:700;letter-spacing:-.02em" class="num">${esc(ruleTime(r))}</div><div class="meta" style="margin:2px 0 8px">${esc(r.name)} · ${esc(ruleDesc(r))}</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="${r.days.includes(d) ? "on" : ""}">${DAYS[d]}</span>`).join("")}</div></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px"><button class="sw ${r.enabled ? "on" : ""}" role="switch" aria-checked="${r.enabled}" data-rt="${r.id}"></button><div style="display:flex"><button class="btn ghost sm icon" data-re="${r.id}" aria-label="Sửa">${I.edit}</button><button class="btn ghost sm icon" data-rd="${r.id}" aria-label="Xoá">${I.trash}</button></div></div></div>`; }).join("")}</div>`
     : `<div class="empty"><b>Chưa có lịch nào</b>Ví dụ: tắt WiFi phòng các em 23:00 → 6:00, khoá mạng giờ học, giới hạn 2 giờ chơi mỗi ngày, khởi động lại router 4:00 sáng.</div>`}`;
@@ -647,7 +647,7 @@ async function ewebSheet(gid, label) {
   const until = open[gid];
   let hours = 1;
   sheet(`<div class="grab"></div><div class="sheet-h"><span class="av" style="background:var(--f3)">${I.globe}</span><div class="t"><h3>eWeb · ${esc(label)}</h3><p>Trang quản trị gốc bên trong router: WAN/PPPoE, DHCP, mở port, DNS, QoS, firmware… Ruijie tự đăng nhập, không cần mật khẩu router.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
-    ${until ? `<div class="alert" style="background:var(--ok-soft);color:#14532d">${I.globe}<div>Đang mở · tự đóng lúc <b>${timeVN(until)}</b></div></div>` : ""}
+    ${until ? `<div class="alert" style="background:var(--ok-soft);color:var(--ok)">${I.globe}<div>Đang mở · tự đóng lúc <b>${timeVN(until)}</b></div></div>` : ""}
     <div class="field"><label class="lbl">Mở trong</label><div class="opts" id="eh">${[1, 3, 8, 24].map((h) => `<button class="opt ${h === hours ? "on" : ""}" data-h="${h}">${h} giờ</button>`).join("")}</div><div class="hint">Hết giờ đường hầm tự đóng. Ai có link trong thời gian này đều vào được router — đừng gửi link cho người khác.</div></div>
     <div class="foot">${until ? `<button class="btn red" id="ewc">Đóng eWeb</button>` : `<button class="btn" data-close>Huỷ</button>`}<button class="btn pri" id="ewo">${I.globe}Mở eWeb</button></div>`);
   $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
@@ -766,7 +766,7 @@ function vParentDevices() {
   const cl = clients().sort((a, b) => a.floor.localeCompare(b.floor, "vi") || a.name.localeCompare(b.name, "vi"));
   const groups = {}; cl.forEach((c) => (groups[c.floor] = groups[c.floor] || []).push(c));
   const blocked = S.d.blocked;
-  return header("Thiết bị") + `<div class="alert" style="background:var(--pri-soft);color:#1e3a8a">${I.eye}<div>Tên máy do hệ thống tự nhận diện nên có thể chưa đúng. Không chắc thì nhìn <b>loại máy</b> và <b>tầng</b>.</div></div>
+  return header("Thiết bị") + `<div class="alert" style="background:var(--pri-soft);color:var(--text2)">${I.eye}<div>Tên máy do hệ thống tự nhận diện nên có thể chưa đúng. Không chắc thì nhìn <b>loại máy</b> và <b>tầng</b>.</div></div>
   ${S.d.people.length ? `<div class="grid g3 fade-list" style="margin-bottom:16px">${S.d.people.map(personCard).join("")}</div>` : ""}
   ${blocked.length ? `<div class="card" style="margin-bottom:16px"><div class="card-h"><h2>Đang bị khoá</h2><div class="grow"></div><span class="chip bad">${blocked.length}</span></div><div class="list">${blocked.map((b) => `<div class="row" style="cursor:default"><span class="av" style="background:var(--bad)">${kindIc(b.kind)}</span><div style="min-width:0"><div class="nm">${esc(b.name)}</div><div class="meta">${b.temp ? `Tự mở sau ${left(b.temp.until)}` : "Khoá đến khi mở"}</div></div><div class="rr"><button class="btn green" data-unblock-dev="${b.mac}">${I.unlock}Mở</button></div></div>`).join("")}</div></div>` : ""}
   <div class="card"><div class="card-h"><h2>Máy đang vào mạng</h2><div class="grow"></div><span class="chip ok">${cl.length}</span></div>
@@ -779,7 +779,7 @@ function parentBlockSheet(mac, name) {
 }
 function vWifiParent() {
   return header("WiFi") + `<div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><h2>${esc(r.floor)}</h2><div class="grow"></div>${r.online ? "" : '<span class="chip bad">Offline</span>'}</div>
-    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.enable ? "Đang bật" : "Đang tắt"} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div>${schLine(s)}</div><button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="0"></button></div>`).join("") || '<div class="meta">Không có WiFi</div>'}</div></div>`).join("")}</div>`;
+    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.enable ? "Đang bật" : "Đang tắt"} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div><button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="0"></button>${s.schedule ? `<div style="grid-column:1/-1;margin-top:-4px">${schLine(s)}</div>` : ""}</div>`).join("") || '<div class="meta">Không có WiFi</div>'}</div></div>`).join("")}</div>`;
 }
 
 /* ---------- Sheet chung ---------- */
@@ -931,6 +931,9 @@ function mountCamOne(src) {
     v.addEventListener("playing", onLive);
     v.addEventListener("loadeddata", onLive);
     v.addEventListener("waiting", () => { if (v.readyState < 3) setCamChip(src, "warn", "Đang tải…"); });
+    // MSE có khi chạy tiếp mà không bắn "playing" → dựa vào timeupdate để trả chip về Realtime
+    v.addEventListener("timeupdate", () => { if (v.readyState >= 3 && v.dataset.chip !== "ok") { v.dataset.chip = "ok"; setCamChip(src, "ok", "Realtime"); } });
+    v.addEventListener("waiting", () => { v.dataset.chip = "warn"; });
     v.addEventListener("error", () => setCamChip(src, "bad", "Lỗi luồng"));
     if (v.readyState >= 2) onLive();
     setTimeout(() => {
@@ -1084,14 +1087,14 @@ function vCameras() {
   const admin = isAdmin();
   const netCams = (S.d?.known || []).filter((k) => k.kind === "camera");
   const gwCard = admin ? `
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-h"><h2>Kết nối Camera Gateway (WebRTC 0 độ trễ)</h2><div class="grow"></div>${c.gatewayUrl ? `<span class="chip ${c.error ? "bad" : "ok"}"><span class="dot"></span>${c.error ? "Offline" : "Đã nối"}</span>` : `<span class="chip warn">Chưa gắn link</span>`}</div>
-      <form class="cam-url" id="cam-gw-form">
+    <details class="card gw-card" style="margin-bottom:16px"${c.gatewayUrl && !c.error ? "" : " open"}>
+      <summary class="card-h" style="margin:0;cursor:pointer;list-style:none"><h2>Camera Gateway</h2><div class="grow"></div>${c.gatewayUrl ? `<span class="chip ${c.error ? "bad" : "ok"}"><span class="dot"></span>${c.error ? "Offline" : "Đã nối"}</span>` : `<span class="chip warn">Chưa gắn link</span>`}</summary>
+      <form class="cam-url" id="cam-gw-form" style="margin-top:12px">
         <input id="cam-gw-in" value="${esc(c.gatewayUrl)}" placeholder="Dán link Tunnel của go2rtc (vd: https://xxx.trycloudflare.com)">
         <button class="btn pri" type="submit">Lưu & Kết nối</button>
       </form>
-      <div class="meta" style="margin-top:8px">Ở nhà: chạy <code>~/.go2rtc/start.sh</code> trên MacBook (hoặc Mini PC 24/7) để lấy link <code>trycloudflare.com</code> dán vào đây — xem WebRTC trễ &lt;0,5s từ mọi nơi.</div>
-    </div>` : "";
+      <div class="meta" style="margin-top:8px">Link tự cập nhật: MacBook ở nhà chạy nền <code>~/.go2rtc/watch.sh</code> mỗi 2 phút — tự dò lại IP camera, mở lại tunnel và báo link mới về đây. Chỉ cần MacBook bật và ở mạng nhà.</div>
+    </details>` : "";
 
   return header("Camera", `<button class="btn sm ${c.alarmOn ? "red" : ""}" id="cam-siren">${I.alert}${c.alarmOn ? "Tắt còi" : "Phát còi"}</button>`) +
     gwCard +
