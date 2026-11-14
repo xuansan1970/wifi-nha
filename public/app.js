@@ -686,18 +686,20 @@ function netHero() {
   const sub = g ? `Đang cho dùng thêm · còn <b class="num">${left(g.until)}</b> (đến ${hmVN(g.until)}), sau đó tự về chế độ`
     : n.next ? `Theo lịch: tự <b>${n.next.on ? "mở" : "tắt"}</b> lúc <b class="num">${hmVN(n.next.at)}</b> ${dayWord(n.next.at)}`
     : n.rules.some((r) => r.enabled) ? "Đang theo lịch" : routerNetSub() || "Chưa đặt lịch tắt mạng";
-  return `<section class="card net ${on ? "is-on" : "is-off"}${g ? " is-grant" : ""}" style="margin-bottom:16px">
+  // App không tắt mạng, nhưng router đang tắt hết WiFi chung theo time limit → báo đúng thực tế
+  const L = sharedSchedules(); const outHours = on && !g && L.length > 0 && L.every((x) => !schState(x.days).air);
+  return `<section class="card net ${on ? "is-on" : "is-off"}${g || outHours ? " is-grant" : ""}" style="margin-bottom:16px">
     <button class="pwr" id="netpw" role="switch" aria-checked="${on}" aria-label="${on ? "Tắt" : "Bật"} mạng gia đình">${I.power}</button>
     <div class="net-t">
       <div class="lbl" style="margin:0">Mạng gia đình</div>
-      <div class="net-st">${on ? (g ? "Đang dùng thêm" : "Đang bật") : "Đang tắt"}</div>
+      <div class="net-st">${on ? (g ? "Đang dùng thêm" : outHours ? "Ngoài giờ phát" : "Đang bật") : "Đang tắt"}</div>
       <div class="meta">${sub}</div>
     </div>
     <div class="net-g">
       <div class="lbl" style="margin:0 0 6px">${g ? "Cho thêm nữa" : on ? "Cho dùng thêm (bỏ qua lịch tắt)" : "Cho dùng tạm"}</div>
       <div class="opts">${[[30, "30 phút"], [60, "1 tiếng"], [120, "2 tiếng"]].map(([m, l]) => `<button class="opt" data-grant="${m}">${l}</button>`).join("")}${g ? `<button class="opt end" id="gend">Kết thúc ngay</button>` : ""}</div>
     </div>
-    <div class="net-note meta">Camera, thiết bị nhà thông minh không bị ảnh hưởng.</div>
+    <div class="net-note meta">${outHours ? `<b style="color:var(--warn)">Đang ngoài giờ phát của router</b> — "Cho dùng thêm" chưa mở được WiFi lúc này; muốn dùng ngoài giờ phải sửa time limit trong eWeb. ` : ""}Camera, thiết bị nhà thông minh không bị ảnh hưởng.</div>
   </section>`;
 }
 function netRulesCard() {
