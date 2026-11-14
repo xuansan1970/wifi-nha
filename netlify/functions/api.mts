@@ -1,209 +1,337 @@
-import type { Config, Context } from "@netlify/functions"
+import type { Config } from "@netlify/functions"
 import * as R from "./lib/ruijie.mts"
-import { checkToken, clearCookie, makeToken, setCookie, tokenFrom, tryPin } from "./lib/auth.mts"
-import { addLog, blockEverywhere, getLog, loadState, Rule, saveState, unblockEverywhere } from "./lib/state.mts"
-import { exec, tick } from "./lib/engine.mts"
+import { clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
+import { exec, Usage } from "./lib/engine.mts"
+import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
+import { KIND_VI } from "./lib/smart.mts"
+import {
+  addLog, getLog, labelOf, loadDevices, loadMeta, loadState, mutate, Rule, saveMeta, Target, vn,
+} from "./lib/state.mts"
+import { getJSON } from "./lib/store.mts"
 
 const json = (data: any, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", ...headers },
   })
-
-function floorLabel(name: string) {
-  const n = name.toLowerCase()
-  if (/tret|trệt|gf|ground/.test(n)) return { label: "Tầng trệt", order: 0 }
-  const m = n.match(/t(?:ầng|ang)?\s*(\d)/)
-  if (m) return { label: `Tầng ${m[1]}`, order: Number(m[1]) }
-  return { label: name, order: 9 }
-}
-
-const HM = /^([01]\d|2[0-3]):[0-5]\d$/
-const isMac = (m: any) => typeof m === "string" && R.macKey(m).length === 12
-
-async function allGids() {
-  return (await R.listProjects()).map((p: any) => p.gid)
-}
-
-async function overview() {
-  const projects = await R.listProjects()
-  const s = await loadState()
-  const routers = await Promise.all(
-    projects.map(async (p: any) => ({ ...p, ...floorLabel(p.name), ...(await R.routerOverview(p.gid)) })),
-  )
-  routers.sort((a, b) => a.order - b.order)
-  // nhớ tên thiết bị để danh sách bị chặn vẫn hiện tên
-  let changed = false
-  for (const r of routers)
-    for (const c of r.clients)
-      if (c.name && c.name !== c.mac && s.names[c.mac] !== c.name) {
-        s.names[c.mac] = c.name
-        changed = true
-      }
-  if (changed) {
-    const s2 = await loadState()
-    s2.names = { ...s2.names, ...s.names }
-    await saveState(s2)
+class Http extends Error {
+  constructor(public status: number, msg: string) {
+    super(msg)
   }
-  return { routers, temps: s.temps, names: s.names, now: Date.now() }
+}
+const HM = /^([01]\d|2[0-3]):[0-5]\d$/
+const ALL = [0, 1, 2, 3, 4, 5, 6]
+const isMac = (m: any) => typeof m === "string" && R.macKey(m).length === 12
+const uid = () => crypto.randomUUID().slice(0, 8)
+
+async function gids() {
+  return (await R.listProjects()).map((p: any) => p.gid as number)
 }
 
-function cleanRule(b: any, gids: number[]): Rule {
+function needAdmin(s: Session) {
+  if (s.role !== "admin") throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
+}
+
+async function parseTarget(t: any): Promise<Target> {
+  if (t?.kind === "person") {
+    const st = await loadState()
+    if (!st.people.some((p) => p.id === t.id)) throw new Http(400, "Không tìm thấy người này")
+    return { kind: "person", id: String(t.id) }
+  }
+  if (t?.kind === "device" && isMac(t.id)) return { kind: "device", id: R.macKey(t.id) }
+  throw new Http(400, "Chưa chọn thiết bị/người")
+}
+
+async function cleanRule(b: any, all: number[]): Promise<Rule> {
   const days = Array.isArray(b.days) ? [...new Set(b.days.map(Number).filter((d: number) => d >= 0 && d <= 6))] : []
-  const base = {
-    id: typeof b.id === "string" && b.id ? b.id : crypto.randomUUID().slice(0, 8),
+  const base: Rule = {
+    id: typeof b.id === "string" && /^[\w-]{1,20}$/.test(b.id) ? b.id : uid(),
     type: b.type,
-    name: String(b.name || "").slice(0, 60),
+    name: String(b.name || "").trim().slice(0, 60),
     enabled: b.enabled !== false,
-    days: days.length ? (days as number[]) : [0, 1, 2, 3, 4, 5, 6],
-  } as Rule
+    days: (days.length ? days : ALL) as number[],
+  }
   const pickGids = (x: any) => {
-    const v = (Array.isArray(x) ? x.map(Number) : []).filter((g: number) => gids.includes(g))
-    if (!v.length) throw new Error("Chưa chọn router")
+    const v = (Array.isArray(x) ? x.map(Number) : []).filter((g: number) => all.includes(g))
+    if (!v.length) throw new Http(400, "Chưa chọn router")
     return v
   }
   if (b.type === "reboot") {
-    if (!HM.test(b.at)) throw new Error("Giờ không hợp lệ")
-    return { ...base, at: b.at, gids: pickGids(b.gids), name: base.name || `Khởi động lại ${b.at}` }
+    if (!HM.test(b.at)) throw new Http(400, "Giờ không hợp lệ")
+    return { ...base, at: b.at, gids: pickGids(b.gids), name: base.name || `Khởi động lại lúc ${b.at}` }
   }
   if (b.type === "wifi") {
-    if (!HM.test(b.offAt) || !HM.test(b.onAt) || b.offAt === b.onAt) throw new Error("Giờ tắt/bật không hợp lệ")
+    if (!HM.test(b.offAt) || !HM.test(b.onAt) || b.offAt === b.onAt) throw new Http(400, "Giờ tắt/bật không hợp lệ")
     const targets = (Array.isArray(b.targets) ? b.targets : [])
-      .map((t: any) => ({ gid: Number(t.gid), ssidIds: (t.ssidIds || []).map(Number).filter(Boolean) }))
-      .filter((t: any) => gids.includes(t.gid) && t.ssidIds.length)
-    if (!targets.length) throw new Error("Chưa chọn WiFi nào")
+      .map((t: any) => ({ gid: Number(t.gid), ssidIds: [...new Set((t.ssidIds || []).map(Number).filter(Boolean))] as number[] }))
+      .filter((t: any) => all.includes(t.gid) && t.ssidIds.length)
+    if (!targets.length) throw new Http(400, "Chưa chọn WiFi nào")
     return { ...base, offAt: b.offAt, onAt: b.onAt, targets, name: base.name || `Tắt WiFi ${b.offAt}–${b.onAt}` }
   }
   if (b.type === "block") {
-    if (!HM.test(b.from) || !HM.test(b.to) || b.from === b.to) throw new Error("Giờ chặn/mở không hợp lệ")
-    if (!isMac(b.mac)) throw new Error("Chưa chọn thiết bị")
-    const macName = String(b.macName || b.mac).slice(0, 60)
-    return {
-      ...base,
-      from: b.from,
-      to: b.to,
-      mac: R.macKey(b.mac),
-      macName,
-      gids: pickGids(b.gids),
-      name: base.name || `Chặn ${macName} ${b.from}–${b.to}`,
-    }
+    if (!HM.test(b.from) || !HM.test(b.to) || b.from === b.to) throw new Http(400, "Giờ chặn/mở không hợp lệ")
+    const target = await parseTarget(b.target)
+    return { ...base, from: b.from, to: b.to, target, name: base.name || `Giờ nghỉ ${b.from}–${b.to}` }
   }
-  throw new Error("Loại lịch không hợp lệ")
+  if (b.type === "quota") {
+    const minutes = Math.round(Number(b.minutes))
+    if (!(minutes >= 5 && minutes <= 1440)) throw new Http(400, "Số phút từ 5 đến 1440")
+    const target = await parseTarget(b.target)
+    return { ...base, minutes, target, name: base.name || `Tối đa ${minutes >= 60 ? `${+(minutes / 60).toFixed(1)}h` : `${minutes}′`}/ngày` }
+  }
+  throw new Http(400, "Loại lịch không hợp lệ")
 }
 
-export default async (req: Request, context: Context) => {
+// Dữ liệu gửi cho giao diện: ảnh chụp + người + chặn tạm + mức dùng hôm nay
+async function view(snapMaxAge: number, s: Session) {
+  const [snap, st, meta, devices, usage] = await Promise.all([
+    getSnapshot(snapMaxAge),
+    loadState(),
+    loadMeta(),
+    loadDevices(),
+    getJSON<Usage>("usage", { date: "", m: {}, hit: {} }),
+  ])
+  const today = vn(Date.now()).date
+  const blockedMacs = new Set<string>()
+  snap.routers.forEach((r: any) => r.blocked.forEach((m: string) => blockedMacs.add(m)))
+  const blocked = [...blockedMacs].map((mac) => {
+    const d = devices[mac]
+    return {
+      mac,
+      name: meta[mac]?.custom || d?.name || mac,
+      kind: d?.kind || "unknown",
+      owner: meta[mac]?.owner ?? null,
+      floor: d?.floor ?? "",
+      temp: st.temps.find((t) => t.macs.includes(mac)) ?? null,
+    }
+  })
+  const known = Object.values(devices)
+    .map((d) => ({
+      mac: d.mac,
+      name: meta[d.mac]?.custom || d.name || d.mac,
+      kind: d.kind || "unknown",
+      vendor: d.vendor || "",
+      owner: meta[d.mac]?.owner ?? null,
+      floor: d.floor || "",
+      ssid: d.ssid || "",
+      firstSeen: d.firstSeen,
+      lastSeen: d.lastSeen,
+    }))
+    .sort((a, b) => b.lastSeen - a.lastSeen)
+  return {
+    me: s,
+    at: snap.at,
+    errors: snap.errors,
+    routers: snap.routers,
+    people: st.people,
+    temps: st.temps,
+    rules: st.rules,
+    blocked,
+    known: s.role === "admin" ? known : known.filter((k) => k.owner),
+    usage: usage.date === today ? usage.m : {},
+    kinds: KIND_VI,
+  }
+}
+
+export default async (req: Request) => {
   const url = new URL(req.url)
   const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/"
-  const method = req.method
-  const body = method === "GET" || method === "DELETE" ? {} : await req.json().catch(() => ({}))
+  const m = req.method
+  const body: any = m === "GET" || m === "DELETE" ? {} : await req.json().catch(() => ({}))
 
   try {
-    if (path === "/health") {
+    // ---------- công khai ----------
+    if (path === "/health")
       return json({
         ok: true,
-        configured: {
-          ruijie: !!(Netlify.env.get("RUIJIE_USER") && Netlify.env.get("RUIJIE_PASS")),
-          pin: !!Netlify.env.get("APP_PIN"),
-          secret: !!Netlify.env.get("APP_SECRET"),
-        },
+        ruijie: !!(Netlify.env.get("RUIJIE_USER") && Netlify.env.get("RUIJIE_PASS")),
+        users: !!Netlify.env.get("APP_USERS"),
+        secret: !!Netlify.env.get("APP_SECRET"),
       })
-    }
-    if (path === "/login" && method === "POST") {
-      const r = await tryPin(String(body.pin ?? ""))
-      if (!r.ok) return json({ error: r.wait ? `Sai quá nhiều lần, thử lại sau ${r.wait} phút` : "Sai mã PIN" }, 401)
-      return json({ ok: true }, 200, { "Set-Cookie": setCookie(makeToken()) })
+    if (path === "/users" && m === "GET") return json({ users: await publicUsers() })
+    if (path === "/login" && m === "POST") {
+      const r = await login(String(body.uid ?? ""), String(body.pin ?? ""))
+      if (!r.user) return json({ error: r.error }, 401)
+      return json({ ok: true, me: { uid: r.user.id, name: r.user.name, role: r.user.role } }, 200, {
+        "Set-Cookie": setCookie(makeToken(r.user), r.user.role),
+      })
     }
     if (path === "/logout") return json({ ok: true }, 200, { "Set-Cookie": clearCookie })
 
-    if (!checkToken(tokenFrom(req))) return json({ error: "Cần đăng nhập" }, 401)
+    // ---------- cần đăng nhập ----------
+    const s = await readSession(req)
+    if (!s) return json({ error: "Cần đăng nhập" }, 401)
 
-    if (path === "/me") return json({ ok: true })
-    if (path === "/overview") return json(await overview())
+    if (path === "/me") return json({ me: s })
+    // fast=1: trả dữ liệu đã lưu (≤10 phút) ngay; mặc định: làm mới nếu cũ hơn 20s
+    if (path === "/view") return json(await view(url.searchParams.get("fast") ? 10 * 60_000 : 20_000, s))
+    if (path === "/refresh" && m === "POST") {
+      await buildSnapshot()
+      return json(await view(60_000, s))
+    }
     if (path === "/log") return json({ log: await getLog() })
 
-    if (path === "/reboot" && method === "POST") {
-      const gids = await allGids()
-      const target = body.gid === "all" ? gids : [Number(body.gid)].filter((g) => gids.includes(g))
-      if (!target.length) return json({ error: "Router không hợp lệ" }, 400)
-      const log = await exec({ kind: "reboot", gids: target, label: body.label || "thủ công" }, "Bấm tay")
-      await addLog([log])
-      return log.ok ? json({ ok: true, msg: log.text }) : json({ error: log.text }, 502)
-    }
-
-    if (path === "/wifi" && method === "POST") {
-      const gid = Number(body.gid)
-      if (!(await allGids()).includes(gid)) return json({ error: "Router không hợp lệ" }, 400)
-      const ids = (body.ssidIds || []).map(Number).filter(Boolean)
+    // ---- chặn / mở (Ba Mẹ cũng dùng được) ----
+    if (path === "/block" && m === "POST") {
+      const target = await parseTarget(body.target)
+      const minutes = Math.max(0, Math.min(10080, Math.round(Number(body.minutes) || 0)))
+      const [st, devices, meta] = await Promise.all([loadState(), loadDevices(), loadMeta()])
+      const label = labelOf(target, st, devices, meta)
       const log = await exec(
-        { kind: "wifi", enable: !!body.enable, targets: [{ gid, ssidIds: ids }], label: body.label || "thủ công" },
-        "Bấm tay",
+        { kind: "block", target, label, until: minutes ? Date.now() + minutes * 60000 : undefined, reason: minutes ? `${minutes}′` : "" },
+        s.name,
       )
       await addLog([log])
-      return log.ok ? json({ ok: true }) : json({ error: log.text }, 502)
+      if (!log.ok) throw new Http(502, log.text)
+      return json({ ok: true })
     }
-
-    if (path === "/block" && method === "POST") {
-      if (!isMac(body.mac)) return json({ error: "MAC không hợp lệ" }, 400)
-      const mac = R.macKey(body.mac)
-      const name = String(body.name || mac).slice(0, 60)
-      const gids = await allGids()
-      const errs = await blockEverywhere(mac, gids)
-      const minutes = Number(body.minutes) || 0
-      const s = await loadState()
-      s.temps = s.temps.filter((x) => x.mac !== mac)
-      if (minutes > 0) s.temps.push({ mac, name, gids, until: Date.now() + minutes * 60000 })
-      s.names[mac] = name
-      await saveState(s)
-      await addLog([
-        {
-          t: Date.now(),
-          ok: true,
-          by: "Bấm tay",
-          text: `Chặn ${name}${minutes ? ` trong ${minutes >= 60 ? `${+(minutes / 60).toFixed(1)}h` : `${minutes}′`}` : ""}`,
-        },
-      ])
-      return json({ ok: true, warnings: errs })
+    if (path === "/unblock" && m === "POST") {
+      const target = await parseTarget(body.target)
+      const [st, devices, meta] = await Promise.all([loadState(), loadDevices(), loadMeta()])
+      const log = await exec({ kind: "unblock", target, label: labelOf(target, st, devices, meta) }, s.name)
+      await addLog([log])
+      if (!log.ok) throw new Http(502, log.text)
+      return json({ ok: true })
     }
-
-    if (path === "/unblock" && method === "POST") {
-      if (!isMac(body.mac)) return json({ error: "MAC không hợp lệ" }, 400)
-      const mac = R.macKey(body.mac)
-      await unblockEverywhere(mac, await allGids())
-      const s = await loadState()
-      s.temps = s.temps.filter((x) => x.mac !== mac)
-      await saveState(s)
-      await addLog([{ t: Date.now(), ok: true, by: "Bấm tay", text: `Mở chặn ${s.names[mac] || mac}` }])
+    if (path === "/reboot" && m === "POST") {
+      const all = await gids()
+      const target = body.gid === "all" ? all : [Number(body.gid)].filter((g) => all.includes(g))
+      if (!target.length) throw new Http(400, "Router không hợp lệ")
+      const log = await exec({ kind: "reboot", gids: target, label: String(body.label || "").slice(0, 40) || "bấm tay" }, s.name)
+      await addLog([log])
+      if (!log.ok) throw new Http(502, log.text)
       return json({ ok: true })
     }
 
-    if (path === "/rules" && method === "GET") return json({ rules: (await loadState()).rules })
-    if (path === "/rules" && method === "POST") {
-      const rule = cleanRule(body, await allGids())
-      const s = await loadState()
-      const i = s.rules.findIndex((r) => r.id === rule.id)
-      if (i >= 0) s.rules[i] = rule
-      else s.rules.push(rule)
-      await saveState(s)
+    // ---------- chỉ admin ----------
+    needAdmin(s)
+
+    if (path === "/wifi/toggle" && m === "POST") {
+      const gid = Number(body.gid)
+      if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      const log = await exec(
+        { kind: "wifi", enable: !!body.enable, targets: [{ gid, ssidIds: [Number(body.ssidId)] }], label: String(body.name || "").slice(0, 40) },
+        s.name,
+      )
+      await addLog([log])
+      if (!log.ok) throw new Http(502, log.text)
+      return json({ ok: true })
+    }
+    if (path === "/wifi/create" && m === "POST") {
+      const name = String(body.name || "").trim()
+      const pass = String(body.password || "")
+      if (!name || Buffer.byteLength(name) > 32) throw new Http(400, "Tên WiFi 1–32 ký tự")
+      if (pass.length < 8 || pass.length > 63) throw new Http(400, "Mật khẩu WiFi 8–63 ký tự")
+      const bands = (Array.isArray(body.bands) ? body.bands : []).filter((b: string) => ["2.4G", "5G"].includes(b))
+      if (!bands.length) throw new Http(400, "Chọn ít nhất 1 băng tần")
+      const all = await gids()
+      const targets = (Array.isArray(body.gids) ? body.gids.map(Number) : []).filter((g: number) => all.includes(g))
+      if (!targets.length) throw new Http(400, "Chọn router")
+      const errs: string[] = []
+      for (const gid of targets)
+        try {
+          await R.createSsid(gid, { name, password: pass, bands, hidden: !!body.hidden, isolation: !!body.isolation })
+        } catch (e: any) {
+          errs.push(e.message)
+        }
+      await addLog([{ t: Date.now(), ok: !errs.length, by: s.name, text: `Tạo WiFi “${name}” trên ${targets.length - errs.length}/${targets.length} router${errs.length ? ` — ${errs[0]}` : ""}` }])
+      if (errs.length === targets.length) throw new Http(502, errs[0])
+      await buildSnapshot().catch(() => {})
+      return json({ ok: true, errors: errs })
+    }
+    if (path === "/wifi/delete" && m === "POST") {
+      const gid = Number(body.gid)
+      if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      await R.deleteSsid(gid, Number(body.ssidId))
+      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Xoá WiFi “${String(body.name || body.ssidId)}”` }])
+      await buildSnapshot().catch(() => {})
+      return json({ ok: true })
+    }
+
+    if (path === "/device" && m === "POST") {
+      if (!isMac(body.mac)) throw new Http(400, "MAC không hợp lệ")
+      const mac = R.macKey(body.mac)
+      const meta = await loadMeta()
+      const cur = (meta[mac] = meta[mac] ?? {})
+      if ("name" in body) {
+        const name = String(body.name || "").trim().slice(0, 40)
+        if (name) cur.custom = name
+        else delete cur.custom
+        // đồng bộ tên lên Ruijie để app Reyee cũng thấy
+        const d = (await loadDevices())[mac]
+        if (name && d?.gid) await R.renameClient(d.gid, mac, name).catch(() => {})
+      }
+      if ("owner" in body) {
+        const st = await loadState()
+        if (body.owner && !st.people.some((p) => p.id === body.owner)) throw new Http(400, "Không có người này")
+        if (body.owner) cur.owner = String(body.owner)
+        else delete cur.owner
+      }
+      if (!cur.custom && !cur.owner) delete meta[mac]
+      await saveMeta(meta)
+      return json({ ok: true })
+    }
+
+    if (path === "/people" && m === "POST") {
+      const name = String(body.name || "").trim().slice(0, 30)
+      if (!name) throw new Http(400, "Nhập tên")
+      const p = await mutate((st) => {
+        const ex = st.people.find((x) => x.id === body.id)
+        if (ex) {
+          ex.name = name
+          return ex
+        }
+        const np = { id: uid(), name, color: st.people.length % 6 }
+        st.people.push(np)
+        return np
+      })
+      return json({ ok: true, person: p })
+    }
+    const pm = path.match(/^\/people\/([\w-]+)$/)
+    if (pm && m === "DELETE") {
+      await mutate((st) => {
+        st.people = st.people.filter((p) => p.id !== pm[1])
+        st.rules = st.rules.filter((r) => !(r.target?.kind === "person" && r.target.id === pm[1]))
+      })
+      const meta = await loadMeta()
+      for (const k of Object.keys(meta)) if (meta[k].owner === pm[1]) delete meta[k].owner
+      await saveMeta(meta)
+      return json({ ok: true })
+    }
+
+    if (path === "/rules" && m === "POST") {
+      const rule = await cleanRule(body, await gids())
+      await mutate((st) => {
+        const i = st.rules.findIndex((r) => r.id === rule.id)
+        if (i >= 0) st.rules[i] = rule
+        else st.rules.push(rule)
+      })
       return json({ ok: true, rule })
     }
-    const m = path.match(/^\/rules\/([\w-]+)(\/toggle)?$/)
-    if (m) {
-      const s = await loadState()
-      const r = s.rules.find((x) => x.id === m[1])
-      if (!r) return json({ error: "Không tìm thấy lịch" }, 404)
-      if (method === "DELETE") s.rules = s.rules.filter((x) => x.id !== m[1])
-      else if (m[2] && method === "POST") r.enabled = !r.enabled
-      else return json({ error: "Không hỗ trợ" }, 405)
-      await saveState(s)
+    const rm = path.match(/^\/rules\/([\w-]+)(\/toggle)?$/)
+    if (rm) {
+      await mutate((st) => {
+        const r = st.rules.find((x) => x.id === rm[1])
+        if (!r) throw new Http(404, "Không tìm thấy lịch")
+        if (m === "DELETE") st.rules = st.rules.filter((x) => x.id !== rm[1])
+        else if (rm[2] && m === "POST") r.enabled = !r.enabled
+        else throw new Http(405, "Không hỗ trợ")
+      })
       return json({ ok: true })
     }
 
-    if (path === "/tick" && method === "POST") return json(await tick())
+    if (path === "/inventory") return json(await inventory())
+    if (path === "/pin" && m === "POST") {
+      await setPin(String(body.uid), String(body.pin))
+      await addLog([{ t: Date.now(), ok: true, by: s.name, text: `Đổi mã PIN tài khoản ${body.uid}` }])
+      return json({ ok: true })
+    }
+    if (path === "/accounts") return json({ users: await publicUsers() })
 
-    return json({ error: "Không tìm thấy" }, 404)
+    throw new Http(404, "Không tìm thấy")
   } catch (e: any) {
-    console.error(path, e)
-    const status = e instanceof R.RuijieError ? 502 : 400
+    if (!(e instanceof Http)) console.error(path, e)
+    const status = e instanceof Http ? e.status : e instanceof R.RuijieError ? 502 : 500
     return json({ error: e.message || "Lỗi không xác định", code: e.code }, status)
   }
 }

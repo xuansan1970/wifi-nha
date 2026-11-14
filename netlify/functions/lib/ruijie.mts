@@ -1,6 +1,6 @@
 // Ruijie Cloud client — dùng đúng các API mà web cloud-as.ruijienetworks.com đang gọi.
 import { constants, publicEncrypt } from "node:crypto"
-import { getStore } from "@netlify/blobs"
+import { store } from "./store.mts"
 
 const BASE = "https://cloud-as.ruijienetworks.com"
 const SERVICE = `${BASE}/webproxy/sso/back?rewrite=off&back=${encodeURIComponent(BASE + "/macc5/adminIntl/#/theme-gateway")}`
@@ -130,7 +130,6 @@ async function login(): Promise<Jar> {
   return jar
 }
 
-const store = () => getStore({ name: "wifi-admin", consistency: "strong" })
 
 let sessionAt = 0
 async function getSession(force = false): Promise<Jar> {
