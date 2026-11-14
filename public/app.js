@@ -339,7 +339,7 @@ function devRow(c, bs) {
   const iot = c.kind === "iot" || c.kind === "camera";
   return `<button class="row" data-dev="${c.mac}">
     <span class="av" style="background:${bs.has(c.mac) ? "var(--bad)" : iot ? "#94a3b8" : floorC(c.floor)}">${kindIc(c.kind)}</span>
-    <div style="min-width:0"><div class="nm">${esc(c.name)}${c.guess ? '<span class="chip" style="height:20px;font-size:11px">đoán</span>' : ""}</div>
+    <div style="min-width:0"><div class="nm"><span class="ell">${esc(c.name)}</span>${c.guess ? '<span class="chip" style="height:20px;font-size:11px">đoán</span>' : ""}</div>
       <div class="meta nowrap">${p ? `<b style="color:${pColor(p)}">${esc(p.name)}</b> · ` : ""}${esc(c.kindVi)}${c.vendor ? " · " + esc(c.vendor) : ""} · ${c.wired ? "Có dây" : `${esc(c.ssid)} ${esc(c.band)} ${sig(c.rssi)}`}</div></div>
     <div class="rr">${bs.has(c.mac) ? '<span class="chip bad">Chặn</span>' : `<span class="meta hide-m num">${bytes(c.traffic)}</span>`}${I.chev}</div></button>`;
 }
@@ -430,7 +430,7 @@ function vWifi() {
   return header("Mạng WiFi", `<button class="btn pri" id="wadd">${I.plus}<span>Tạo WiFi</span></button>`) + `
   <div class="alert">${I.eye}<div>WiFi <b>ẩn</b> (IoT cho camera, hub…) vẫn hoạt động bình thường, chỉ không hiện khi dò WiFi. Tắt nhầm WiFi IoT sẽ làm camera mất kết nối.</div></div>
   <div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><div><h2>${esc(r.floor)}</h2><small>${esc(r.name)}</small></div></div>
-    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""}${s.private ? ` · <span class="chip pri" style="height:20px">Riêng của bạn</span>` : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div>
+    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""}${s.private ? ` · <span class="chip pri" style="height:20px">Riêng của bạn</span>` : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div>${schLine(s)}</div>
       <div style="display:flex"><button class="btn ghost sm icon" data-wedit="${s.id}" data-gid="${r.gid}" aria-label="Cài đặt">${I.gear}</button><button class="btn ghost sm icon" data-wdel="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" aria-label="Xoá">${I.trash}</button></div>
       <button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot ? 1 : 0}"></button></div>`).join("") || '<div class="empty">Không đọc được WiFi</div>'}</div></div>`).join("")}</div>`;
 }
@@ -452,6 +452,58 @@ function wifiCreateSheet() {
 }
 
 const DAYK = [["mon", "T2"], ["tue", "T3"], ["wed", "T4"], ["thu", "T5"], ["fri", "T6"], ["sat", "T7"], ["sun", "CN"]];
+/* ---------- Time limit có sẵn trên router (cài trong eWeb) ---------- */
+const DKEY = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+function vnNow(ms = Date.now()) { const d = new Date(ms + 7 * 3600000); return { dow: d.getUTCDay(), hm: `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}` }; }
+function schWin(sch, k) { return (sch?.[k] || []).filter((w) => Array.isArray(w) && w.length === 2); }
+// Tóm tắt: gom các ngày cùng khung giờ → "07:00–21:00 hằng ngày" / "T2–T6 07:00–21:00 · T7, CN 07:00–23:00"
+function schSummary(sch) {
+  if (!sch) return "";
+  const groups = [];
+  DAYK.forEach(([k, l]) => { const v = schWin(sch, k).map((w) => w.join("–")).join(", ") || "tắt cả ngày"; const g = groups.find((x) => x.v === v); g ? g.d.push(l) : groups.push({ v, d: [l] }); });
+  if (groups.length === 1) return `${groups[0].v} hằng ngày`;
+  return groups.map((g) => `${g.d.length > 2 && DAYK.findIndex(([, l]) => l === g.d[g.d.length - 1]) - DAYK.findIndex(([, l]) => l === g.d[0]) === g.d.length - 1 ? g.d[0] + "–" + g.d[g.d.length - 1] : g.d.join(", ")} ${g.v}`).join(" · ");
+}
+// Trạng thái lúc này + lần đổi kế tiếp (giờ Việt Nam). "23:59" coi như hết ngày.
+function schState(sch, ms = Date.now()) {
+  if (!sch) return null;
+  const { dow, hm } = vnNow(ms);
+  const inWin = (d, t) => schWin(sch, DKEY[d]).some(([a, b]) => t >= a && (t < b || (b === "23:59" && t <= b)));
+  const air = inWin(dow, hm);
+  for (let i = 0; i < 8; i++) {
+    const d = (dow + i) % 7; const ws = schWin(sch, DKEY[d]);
+    const pts = ws.flatMap(([a, b]) => [[a, true], [b, false]]).filter(([t]) => t !== "23:59").sort((x, y) => (x[0] < y[0] ? -1 : 1));
+    for (const [t, on] of pts) if ((i > 0 || t > hm) && on !== air) return { air, next: { hm: t, on, day: i } };
+  }
+  return { air, next: null };
+}
+function dayLbl(i) { return i === 0 ? "hôm nay" : i === 1 ? "ngày mai" : DAYS[(vnNow().dow + i) % 7]; }
+function schLine(s) {
+  if (!s.schedule) return "";
+  const st = schState(s.schedule.days);
+  const now = st.air ? `<span style="color:var(--ok)">trong giờ phát</span>` : `<span style="color:var(--warn)">ngoài giờ · router tự tắt</span>`;
+  const nx = st.next ? ` · ${st.next.on ? "mở" : "tắt"} ${st.next.hm} ${dayLbl(st.next.day)}` : "";
+  return `<div class="meta sch">${I.clock}<span>${esc(schSummary(s.schedule.days))} · ${now}${nx}</span></div>`;
+}
+// Các WiFi dùng chung có time limit (bỏ IoT/ẩn/riêng), gộp cùng tên giữa các tầng
+function sharedSchedules() {
+  const m = new Map();
+  (S.d?.routers || []).forEach((r) => r.ssids.forEach((s) => {
+    if (!s.schedule || s.iot || s.hidden || s.private) return;
+    const sum = schSummary(s.schedule.days); const k = s.name + "|" + sum;
+    const g = m.get(k) || { name: s.name, sum, days: s.schedule.days, floors: [] }; g.floors.push(r.floor); m.set(k, g);
+  }));
+  return [...m.values()];
+}
+function routerSchedCard() {
+  const L = sharedSchedules(); const all = [];
+  (S.d?.routers || []).forEach((r) => r.ssids.forEach((s) => s.schedule && (s.iot || s.hidden || s.private) && all.push({ name: s.name, sum: schSummary(s.schedule.days), days: s.schedule.days, floors: [r.floor] })));
+  const rows = [...L, ...all];
+  if (!rows.length) return "";
+  return `<div class="card" style="margin-bottom:16px"><div class="card-h">${I.clock}<h2>Time limit trên router</h2><div class="grow"></div><small>Cài trong eWeb · router tự áp dụng</small></div>
+  <div class="list">${rows.map((g) => { const st = schState(g.days); return `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(g.name)}</div><div class="meta">${esc(g.floors.join(", "))}</div><div class="meta num" style="margin-top:2px">${esc(g.sum)}</div></div><span class="chip ${st.air ? "ok" : "warn"}">${st.air ? "Đang phát" : "Ngoài giờ"}${st.next ? ` · ${st.next.on ? "mở" : "tắt"} ${st.next.hm}` : ""}</span></div>`; }).join("")}</div>
+  <div class="hint" style="margin-top:10px">Ngoài khung giờ, router tự tắt WiFi đó. Lịch "Hẹn giờ" và công tắc Mạng gia đình của app chạy thêm bên trên, không xoá lịch router.</div></div>`;
+}
 function wifiEditSheet(gid, id) {
   const r = S.d.routers.find((x) => x.gid === gid); const w = r?.ssids.find((x) => x.id === id);
   if (!w) return toast("Không tìm thấy WiFi", 1);
@@ -504,7 +556,7 @@ function ruleDesc(r) {
 function vRules() {
   const R = S.d.rules;
   return header("Hẹn giờ", `<button class="btn pri" id="radd">${I.plus}<span>Thêm lịch</span></button>`) + `<div class="alert" style="background:var(--pri-soft);color:#1e3a8a">${I.clock}<div>Lịch chạy trên máy chủ mỗi phút theo giờ Việt Nam — vẫn chạy khi điện thoại, MacBook tắt.</div></div>
-  ${R.length ? `<div class="grid g2 fade-list">${R.map((r) => { const [l, ic, c] = RT[r.type]; return `<div class="card" style="opacity:${r.enabled ? 1 : .55};display:flex;gap:14px;align-items:flex-start"><span class="floor-ic" style="background:${c}">${I[ic]}</span><div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:700;letter-spacing:-.02em" class="num">${esc(ruleTime(r))}</div><div class="meta" style="margin:2px 0 8px">${esc(r.name)} · ${esc(ruleDesc(r))}</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="${r.days.includes(d) ? "on" : ""}">${DAYS[d]}</span>`).join("")}</div></div>
+  ${routerSchedCard()}${R.length ? `<div class="grid g2 fade-list">${R.map((r) => { const [l, ic, c] = RT[r.type]; return `<div class="card" style="opacity:${r.enabled ? 1 : .55};display:flex;gap:14px;align-items:flex-start"><span class="floor-ic" style="background:${c}">${I[ic]}</span><div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:700;letter-spacing:-.02em" class="num">${esc(ruleTime(r))}</div><div class="meta" style="margin:2px 0 8px">${esc(r.name)} · ${esc(ruleDesc(r))}</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="${r.days.includes(d) ? "on" : ""}">${DAYS[d]}</span>`).join("")}</div></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px"><button class="sw ${r.enabled ? "on" : ""}" role="switch" aria-checked="${r.enabled}" data-rt="${r.id}"></button><div style="display:flex"><button class="btn ghost sm icon" data-re="${r.id}" aria-label="Sửa">${I.edit}</button><button class="btn ghost sm icon" data-rd="${r.id}" aria-label="Xoá">${I.trash}</button></div></div></div>`; }).join("")}</div>`
     : `<div class="empty"><b>Chưa có lịch nào</b>Ví dụ: tắt WiFi phòng các em 23:00 → 6:00, khoá mạng giờ học, giới hạn 2 giờ chơi mỗi ngày, khởi động lại router 4:00 sáng.</div>`}`;
 }
@@ -622,12 +674,18 @@ function dayWord(t) {
   if (d === tmr) return "ngày mai";
   return DAYS[new Date(t + 7 * 3600000).getUTCDay()];
 }
+function routerNetSub() {
+  const L = sharedSchedules(); if (!L.length) return "";
+  const st = L.map((g) => schState(g.days)); const off = st.filter((x) => !x.air).length;
+  const nx = st.map((x) => x.next).filter(Boolean).sort((x, y) => x.day - y.day || (x.hm < y.hm ? -1 : 1))[0];
+  return `Time limit router: <b>${off ? `${off}/${L.length} WiFi ngoài giờ` : "đang trong giờ phát"}</b>${nx ? ` · ${nx.on ? "mở" : "tắt"} lúc <b class="num">${nx.hm}</b> ${dayLbl(nx.day)}` : ""} · <a href="#" data-go-rules style="color:inherit;text-decoration:underline">xem</a>`;
+}
 function netHero() {
   const n = S.d.net; if (!n) return "";
   const on = n.on, g = n.grant;
   const sub = g ? `Đang cho dùng thêm · còn <b class="num">${left(g.until)}</b> (đến ${hmVN(g.until)}), sau đó tự về chế độ`
     : n.next ? `Theo lịch: tự <b>${n.next.on ? "mở" : "tắt"}</b> lúc <b class="num">${hmVN(n.next.at)}</b> ${dayWord(n.next.at)}`
-    : n.rules.some((r) => r.enabled) ? "Đang theo lịch" : "Chưa đặt lịch tắt mạng";
+    : n.rules.some((r) => r.enabled) ? "Đang theo lịch" : routerNetSub() || "Chưa đặt lịch tắt mạng";
   return `<section class="card net ${on ? "is-on" : "is-off"}${g ? " is-grant" : ""}" style="margin-bottom:16px">
     <button class="pwr" id="netpw" role="switch" aria-checked="${on}" aria-label="${on ? "Tắt" : "Bật"} mạng gia đình">${I.power}</button>
     <div class="net-t">
@@ -670,6 +728,7 @@ function netRuleSheet(init) {
   draw();
 }
 function bindNet(root) {
+  $$("[data-go-rules]", root).forEach((a) => (a.onclick = (e) => { e.preventDefault(); go(S.me?.role === "parent" ? "wifi" : "rules"); }));
   const pw = $("#netpw", root);
   if (pw) pw.onclick = async () => {
     const on = S.d.net.on;
@@ -720,7 +779,7 @@ function parentBlockSheet(mac, name) {
 }
 function vWifiParent() {
   return header("WiFi") + `<div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><h2>${esc(r.floor)}</h2><div class="grow"></div>${r.online ? "" : '<span class="chip bad">Offline</span>'}</div>
-    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.enable ? "Đang bật" : "Đang tắt"} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div><button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="0"></button></div>`).join("") || '<div class="meta">Không có WiFi</div>'}</div></div>`).join("")}</div>`;
+    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.enable ? "Đang bật" : "Đang tắt"} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div>${schLine(s)}</div><button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="0"></button></div>`).join("") || '<div class="meta">Không có WiFi</div>'}</div></div>`).join("")}</div>`;
 }
 
 /* ---------- Sheet chung ---------- */

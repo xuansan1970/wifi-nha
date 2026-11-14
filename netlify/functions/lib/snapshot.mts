@@ -3,21 +3,36 @@
 import * as R from "./ruijie.mts"
 import { identify, loadOui } from "./smart.mts"
 import { Dev, floorOf, loadDevices, loadMeta, saveDevices } from "./state.mts"
-import { getJSON, setJSON } from "./store.mts"
+import { cacheGet, cachePut, getJSON, setJSON } from "./store.mts"
 
 export type Snapshot = { at: number; routers: any[]; errors: string[] }
 
-let building: Promise<Snapshot> | null = null
-
-export async function getSnapshot(maxAgeMs: number): Promise<Snapshot> {
-  const cur = await getJSON<Snapshot | null>("snapshot", null)
-  if (cur && Date.now() - cur.at <= maxAgeMs) return cur
-  return buildSnapshot()
+// Bản mới nhất: Cache API (miễn phí) hoặc KV, lấy cái mới hơn
+async function latestSnap(): Promise<Snapshot | null> {
+  const [c, k] = await Promise.all([cacheGet<Snapshot>("snapshot"), getJSON<Snapshot | null>("snapshot", null)])
+  if (c && (!k || c.at >= k.at)) return { ...c, kvAt: k?.at ?? 0 } as any
+  return k ? ({ ...k, kvAt: k.at } as any) : null
 }
 
-export function buildSnapshot(): Promise<Snapshot> {
-  if (!building) building = build().finally(() => (building = null))
-  return building
+export async function getSnapshot(maxAgeMs: number): Promise<Snapshot> {
+  const cur: any = await latestSnap()
+  if (cur && Date.now() - cur.at <= maxAgeMs) return cur
+  return buildSnapshot(cur?.kvAt ?? 0)
+}
+
+// Ghi KV tối đa 1 lần / 4 phút (gói Free chỉ 1.000 lần ghi/ngày); Cache API thì ghi mỗi lần
+const KV_SNAP_EVERY = 4 * 60_000
+async function saveSnap(snap: Snapshot, kvAt: number) {
+  await cachePut("snapshot", snap)
+  if (Date.now() - kvAt >= KV_SNAP_EVERY) await setJSON("snapshot", snap)
+}
+
+// Cloudflare Workers không cho dùng chung Promise giữa các request → mỗi request tự build.
+export async function buildSnapshot(kvAt?: number): Promise<Snapshot> {
+  if (kvAt === undefined) kvAt = (await getJSON<Snapshot | null>("snapshot", null))?.at ?? 0
+  const snap = await build()
+  await saveSnap(snap, kvAt)
+  return snap
 }
 
 async function settle<T>(p: Promise<T>, fb: T, errs: string[]) {
@@ -154,17 +169,17 @@ async function build(): Promise<Snapshot> {
     )
   })
   if (devicesChanged) await saveDevices(devices)
-  const snap: Snapshot = { at: Date.now(), routers, errors: allErrors }
-  await setJSON("snapshot", snap)
-  return snap
+  return { at: Date.now(), routers, errors: allErrors }
 }
 
 // Sửa nhanh ảnh chụp sau thao tác để giao diện thấy kết quả ngay (không chờ quét lại)
 export async function patchSnapshot(fn: (s: Snapshot) => void) {
-  const cur = await getJSON<Snapshot | null>("snapshot", null)
+  const cur: any = await latestSnap()
   if (!cur) return
+  delete cur.kvAt
   fn(cur)
-  await setJSON("snapshot", cur)
+  await cachePut("snapshot", cur)
+  await setJSON("snapshot", cur) // thao tác của người dùng: ghi luôn để mọi máy thấy ngay
 }
 
 // Dữ liệu đầy đủ để lưu trữ / xuất (không chứa mật khẩu)

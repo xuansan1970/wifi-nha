@@ -344,3 +344,9 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 :root[data-theme="dark"] .keypad button:active{background:var(--line2)}
 :root[data-theme="dark"] .grab{background:var(--line2)}
 :root[data-theme="dark"] .btn.pri{color:#0F0F0F}
+
+/* ---- Time limit router + chữ dài trong dòng ---- */
+.row .nm .ell{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .nm .chip{flex-shrink:0}
+.meta.sch{display:flex;align-items:flex-start;gap:6px;margin-top:4px;font-size:12.5px;line-height:1.4}
+.meta.sch svg.i{width:14px;height:14px;margin-top:2px;flex:none}
