@@ -1,5 +1,5 @@
 import * as R from "./ruijie.mts"
-import { buildSnapshot } from "./snapshot.mts"
+import { buildSnapshot, patchSnapshot } from "./snapshot.mts"
 import { ensureOui } from "./smart.mts"
 import {
   addLog, blockMacs, labelOf, loadDevices, loadMeta, LogItem, macsOf, mutate, nextMidnightVN, loadState, rebootGroups,
@@ -46,7 +46,11 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
       return { t, ok: true, by, text: `Khởi động lại ${sns.length} router · ${a.label}` }
     }
     if (a.kind === "wifi") {
-      for (const tg of a.targets) await R.setSsids(tg.gid, tg.ssidIds, a.enable)
+      await Promise.all(a.targets.map((tg) => R.setSsids(tg.gid, tg.ssidIds, a.enable)))
+      await patchSnapshot((sn) => {
+        for (const tg of a.targets)
+          for (const r of sn.routers) if (r.gid === tg.gid) for (const x of r.ssids) if (tg.ssidIds.includes(x.id)) x.enable = a.enable
+      })
       return { t, ok: true, by, text: `${a.enable ? "Bật" : "Tắt"} WiFi · ${a.label}` }
     }
     const meta = await loadMeta()
@@ -56,6 +60,9 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
     const key = `${a.target.kind}:${a.target.id}`
     if (a.kind === "block") {
       await blockMacs(macs, gids)
+      await patchSnapshot((sn) => {
+        for (const r of sn.routers) r.blocked = [...new Set([...r.blocked, ...macs])]
+      })
       await mutate((s) => {
         s.temps = s.temps.filter((x) => x.key !== key)
         if (a.until) s.temps.push({ key, label: a.label, macs, until: a.until, reason: a.reason ?? "" })
@@ -63,6 +70,9 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
       return { t, ok: true, by, text: `Chặn mạng ${a.label}${a.reason ? ` (${a.reason})` : ""}` }
     }
     await unblockMacs(macs, gids)
+    await patchSnapshot((sn) => {
+      for (const r of sn.routers) r.blocked = r.blocked.filter((m: string) => !macs.includes(m))
+    })
     await mutate((s) => {
       s.temps = s.temps.filter((x) => x.key !== key)
     })

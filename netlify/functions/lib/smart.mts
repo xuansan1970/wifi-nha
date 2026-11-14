@@ -104,7 +104,8 @@ export function identify(
     if (/ezviz|ipc|cam|imou|hik/.test(h)) kind = "camera"
     else if (/iphone|android|galaxy|redmi|oppo|vivo|pixel/.test(h)) kind = "phone"
     else if (/ipad|tab/.test(h)) kind = "tablet"
-    else if (/macbook|laptop|desktop|-pc|win/.test(h)) kind = "laptop"
+    else if (/book|laptop|desktop|-pc|win/.test(h)) kind = "laptop"
+    else if (/wash|dryer|fridge|refrig|aircon|vacuum|robo/.test(h)) kind = "iot"
     else if (/tv|bravia|tizen|webos|chromecast/.test(h)) kind = "tv"
     else if (/switch|playstation|ps[45]|xbox/.test(h)) kind = "console"
   }
@@ -117,7 +118,12 @@ export function identify(
   if (raw && !JUNK.test(raw)) {
     const ez = raw.match(/_([A-Z]{2}\d{6,})_EZVIZ/i)
     if (ez) return { name: `Camera EZVIZ ${ez[1].slice(-4)}`, kind: "camera", kindVi: KIND_VI.camera, vendor: "EZVIZ", random, guess: true }
-    return { name: raw, kind, kindVi, vendor, random, guess: false }
+    const lg = raw.match(/^LG_Smart_?([A-Za-z]+)/i)
+    if (lg) {
+      const what = /wash/i.test(lg[1]) ? "Máy giặt" : /dry/i.test(lg[1]) ? "Máy sấy" : /refri|fridge/i.test(lg[1]) ? "Tủ lạnh" : /air/i.test(lg[1]) ? "Máy lạnh" : "Thiết bị"
+      return { name: `${what} LG`, kind: what === "Máy lạnh" ? "ac" : "iot", kindVi: what, vendor: "LG", random, guess: true }
+    }
+    return { name: raw.replace(/_/g, " ").replace(/\s+/g, " ").trim(), kind, kindVi, vendor, random, guess: false }
   }
   const tail = c.mac.slice(-4).toUpperCase()
   if (random) return { name: `${kindVi} ẩn danh ·${tail}`, kind, kindVi, vendor, random, guess: true }

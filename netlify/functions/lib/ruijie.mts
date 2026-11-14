@@ -201,7 +201,14 @@ export const macDot = (m: string) =>
   m.replace(/[^0-9a-f]/gi, "").toLowerCase().match(/.{4}/g)!.join(".")
 export const macKey = (m: string) => m.replace(/[^0-9a-f]/gi, "").toLowerCase()
 
+let projCache: { at: number; v: any[] } | null = null
 export async function listProjects() {
+  if (projCache && Date.now() - projCache.at < 300_000) return projCache.v
+  const v = await listProjectsRaw()
+  projCache = { at: Date.now(), v }
+  return v
+}
+async function listProjectsRaw() {
   const j = await call("/maint/network/common/list?page_index=1&page_size=999&version=1&include_fitap=true", "GET")
   return (j.dataList ?? []).map((d: any) => ({
     gid: d.buildingId as number,
@@ -275,10 +282,13 @@ export async function reboot(sns: string[]) {
   await call("/maint/device/reboot", "POST", { params: { snList: sns } })
 }
 
+const tidCache = new Map<number, number>()
 export async function templateId(gid: number): Promise<number> {
+  if (tidCache.has(gid)) return tidCache.get(gid)!
   const j = await call(`/conf/group/${gid}/templates`, "GET")
   const id = j.tempList?.[0]?.id
   if (!id) throw new RuijieError("Không tìm thấy cấu hình WiFi của router")
+  tidCache.set(gid, id)
   return id
 }
 

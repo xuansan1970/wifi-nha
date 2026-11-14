@@ -103,11 +103,41 @@ async function build(): Promise<Snapshot> {
   )
   routers.sort((a, b) => a.order - b.order)
 
+  // Một thiết bị có thể xuất hiện ở nhiều project (router mesh/AP chung) → chỉ giữ ở router nó đang nối
+  const snOwner = new Map<string, number>()
+  for (const r of routers) for (const d of r.devices) snOwner.set(d.sn, r.gid)
+  const seen = new Map<string, number>()
+  for (const r of routers)
+    for (const c of r.clients) {
+      const home = snOwner.get(c.sn)
+      if (home === r.gid) seen.set(c.mac, r.gid) // đúng router đang nối → ưu tiên
+      else if (!seen.has(c.mac)) seen.set(c.mac, home ?? r.gid)
+    }
+  for (const r of routers) {
+    r.clients = r.clients.filter((c: any) => (seen.get(c.mac) ?? r.gid) === r.gid)
+    for (const c of r.clients) {
+      const d = devices[c.mac]
+      if (d) {
+        d.gid = r.gid
+        d.floor = r.floor
+      }
+      c.floor = r.floor
+    }
+  }
+
   // Thiết bị bị chặn (đang offline) vẫn cần tên → lấy từ sổ thiết bị
   await saveDevices(devices)
   const snap: Snapshot = { at: Date.now(), routers, errors: allErrors }
   await setJSON("snapshot", snap)
   return snap
+}
+
+// Sửa nhanh ảnh chụp sau thao tác để giao diện thấy kết quả ngay (không chờ quét lại)
+export async function patchSnapshot(fn: (s: Snapshot) => void) {
+  const cur = await getJSON<Snapshot | null>("snapshot", null)
+  if (!cur) return
+  fn(cur)
+  await setJSON("snapshot", cur)
 }
 
 // Dữ liệu đầy đủ để lưu trữ / xuất (không chứa mật khẩu)

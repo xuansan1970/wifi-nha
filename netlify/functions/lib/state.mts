@@ -109,44 +109,48 @@ export function labelOf(t: Target, s: State, devices: Record<string, Dev>, meta:
 
 export async function blockMacs(macs: string[], gids: number[]) {
   const errs: string[] = []
-  for (const gid of gids)
-    for (const mac of macs) {
-      try {
-        await R.blockMac(gid, mac)
-      } catch (e: any) {
-        errs.push(e.message)
-      }
-    }
+  await Promise.all(
+    gids.map(async (gid) => {
+      for (const mac of macs)
+        try {
+          await R.blockMac(gid, mac)
+        } catch (e: any) {
+          errs.push(e.message)
+        }
+    }),
+  )
   if (macs.length && errs.length === macs.length * gids.length) throw new Error(errs[0])
   return errs
 }
 export async function unblockMacs(macs: string[], gids: number[]) {
   const errs: string[] = []
-  for (const gid of gids) {
-    let blocked: string[] = []
-    try {
-      blocked = await R.listBlocked(gid)
-    } catch (e: any) {
-      errs.push(e.message)
-      continue
-    }
-    for (const mac of macs)
-      if (blocked.includes(R.macKey(mac)))
-        try {
-          await R.call(`/enet/conf/group/${gid}/mac_filter`, "DELETE", {
-            querys: { group_id: gid, mac: R.macDot(mac), type: "global" },
-          })
-        } catch (e: any) {
-          errs.push(e.message)
-        }
-  }
+  await Promise.all(
+    gids.map(async (gid) => {
+      let blocked: string[] = []
+      try {
+        blocked = await R.listBlocked(gid)
+      } catch (e: any) {
+        errs.push(e.message)
+        return
+      }
+      for (const mac of macs)
+        if (blocked.includes(R.macKey(mac)))
+          try {
+            await R.call(`/enet/conf/group/${gid}/mac_filter`, "DELETE", {
+              querys: { group_id: gid, mac: R.macDot(mac), type: "global" },
+            })
+          } catch (e: any) {
+            errs.push(e.message)
+          }
+    }),
+  )
   if (errs.length && errs.length >= gids.length) throw new Error(errs[0])
   return errs
 }
 
 export async function rebootGroups(gids: number[]) {
-  const sns: string[] = []
-  for (const gid of gids) sns.push(...(await R.listDevices(gid)).map((d: any) => d.sn))
+  const lists = await Promise.all(gids.map((g) => R.listDevices(g)))
+  const sns = lists.flat().map((d: any) => d.sn)
   if (sns.length) await R.reboot(sns)
   return sns
 }
