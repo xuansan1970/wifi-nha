@@ -55,7 +55,7 @@ const DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const ini = (n) => String(n || "?").trim().split(/\s+/).map((w) => w[0]).slice(-2).join("").toUpperCase();
 
 /* ---------- Trạng thái ---------- */
-const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0, cam: { loading: false, gatewayUrl: "", streams: [], tuya: { configured: false, devices: [] }, pcs: {}, error: null, alarmOn: false } };
+const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0, cam: { loading: false, gatewayUrl: "", streams: [], pcs: {}, error: null, alarmOn: false } };
 const ADMIN_TABS = [["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["family", "Gia đình", "family"], ["wifi", "WiFi", "wifi"], ["rules", "Hẹn giờ", "clock"], ["data", "Dữ liệu", "db"], ["log", "Nhật ký", "log"], ["settings", "Cài đặt", "gear"]];
 const PARENT_TABS = [["home", "Nhà mình", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["settings", "Tài khoản", "user"]];
 const MOBILE_ADMIN = ["home", "devices", "family", "wifi", "more"];
@@ -753,7 +753,6 @@ async function loadCameras() {
   try {
     const cfg = await api("/cam/config");
     S.cam.gatewayUrl = cfg.gatewayUrl || "";
-    S.cam.tuya = cfg.tuya || { configured: false, devices: [] };
     if (S.cam.gatewayUrl) {
       const r = await fetch(`${S.cam.gatewayUrl}/api/streams`, { signal: AbortSignal.timeout(7000) });
       if (!r.ok) throw new Error(`Gateway phản hồi lỗi ${r.status}`);
@@ -812,21 +811,7 @@ function mountWebRtcAll() {
 function vCameras() {
   const c = S.cam;
   const netCams = (S.d?.known || []).filter((k) => k.kind === "camera");
-  const tuyaCard = c.tuya?.configured ? `
-    <div class="card" style="margin-bottom:16px">
-      <div class="card-h"><h2>Đèn & Công tắc thông minh (Tuya)</h2><div class="grow"></div><span class="chip">${(c.tuya.devices || []).length}</span></div>
-      ${c.tuya.error ? `<div class="alert bad">${I.alert}<div>${esc(c.tuya.error)}</div></div>` : ""}
-      <div class="list">${(c.tuya.devices || []).map((d) => `
-        <div class="row">
-          <span class="av" style="background:${d.on ? "var(--warn)" : "var(--dim)"}">${I.light}</span>
-          <div style="min-width:0"><div class="nm">${esc(d.name)}</div><div class="meta">${d.online ? "Online" : "Offline"}</div></div>
-          <div class="rr"><button class="switch ${d.on ? "on" : ""}" data-tuya-id="${esc(d.id)}" data-tuya-code="${esc(d.code)}" data-tuya-name="${esc(d.name)}" ${d.online ? "" : "disabled"}></button></div>
-        </div>`).join("") || `<div class="empty">Chưa có đèn/công tắc Tuya nào</div>`}
-      </div>
-    </div>` : "";
-
-  return header("Camera & Đèn", `<button class="btn sm ${c.alarmOn ? "red" : ""}" id="cam-siren">${I.alert}${c.alarmOn ? "Tắt còi báo động" : "Phát còi cảnh báo"}</button>`) +
-    tuyaCard + `
+  return header("Camera", `<button class="btn sm ${c.alarmOn ? "red" : ""}" id="cam-siren">${I.alert}${c.alarmOn ? "Tắt còi báo động" : "Phát còi cảnh báo"}</button>`) + `
     <div class="card" style="margin-bottom:16px">
       <div class="card-h"><h2>Kết nối Camera Gateway (WebRTC 0 độ trễ)</h2><div class="grow"></div>${c.gatewayUrl ? `<span class="chip ${c.error ? "bad" : "ok"}"><span class="dot"></span>${c.error ? "Offline" : "Đã nối"}</span>` : `<span class="chip warn">Chưa gắn link</span>`}</div>
       <form class="cam-url" id="cam-gw-form">
@@ -866,13 +851,6 @@ function bindCameras(root) {
     const url = $("#cam-gw-in", root)?.value?.trim() || "";
     await act(gf.querySelector("button"), async () => { await api("/cam/config", { body: { gatewayUrl: url } }); await loadCameras(); }, "Đã lưu Camera Gateway").catch(() => {});
   };
-  $$("[data-tuya-id]", root).forEach((b) => (b.onclick = async () => {
-    const on = !b.classList.contains("on");
-    b.classList.add("busy"); b.classList.toggle("on", on);
-    try { await api("/cam/tuya", { body: { id: b.dataset.tuyaId, code: b.dataset.tuyaCode, name: b.dataset.tuyaName, on } }); toast(`${on ? "Đã bật" : "Đã tắt"} ${b.dataset.tuyaName}`); }
-    catch (e) { b.classList.toggle("on", !on); toast(e.message, 1); }
-    b.classList.remove("busy");
-  }));
   $$("[data-cam-mute]", root).forEach((b) => (b.onclick = () => {
     const v = $("#cam-v-" + b.dataset.camMute);
     if (!v) return;
