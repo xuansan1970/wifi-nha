@@ -55,8 +55,8 @@ const DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const ini = (n) => String(n || "?").trim().split(/\s+/).map((w) => w[0]).slice(-2).join("").toUpperCase();
 
 /* ---------- Trạng thái ---------- */
-const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0 };
-const ADMIN_TABS = [["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["family", "Gia đình", "family"], ["wifi", "WiFi", "wifi"], ["rules", "Hẹn giờ", "clock"], ["data", "Dữ liệu", "db"], ["log", "Nhật ký", "log"], ["settings", "Cài đặt", "gear"]];
+const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0, cam: { loading: false, gatewayUrl: "", streams: [], tuya: { configured: false, devices: [] }, pcs: {}, error: null, alarmOn: false } };
+const ADMIN_TABS = [["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["family", "Gia đình", "family"], ["wifi", "WiFi", "wifi"], ["rules", "Hẹn giờ", "clock"], ["data", "Dữ liệu", "db"], ["log", "Nhật ký", "log"], ["settings", "Cài đặt", "gear"]];
 const PARENT_TABS = [["home", "Nhà mình", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["settings", "Tài khoản", "user"]];
 const MOBILE_ADMIN = ["home", "devices", "family", "wifi", "more"];
 const isAdmin = () => S.me?.role === "admin";
@@ -210,9 +210,11 @@ function shell() {
 }
 function go(t) {
   if (t === "more") return moreSheet();
+  if (S.tab === "cameras" && t !== "cameras") destroyCamPcs();
   S.tab = t; shell(); render(); scrollTo({ top: 0 });
   if (t === "log") loadLog();
   if (t === "data" && !S.inv) loadInv();
+  if (t === "cameras") loadCameras();
 }
 function moreSheet() {
   sheet(`<div class="sheet-h"><div class="t"><h3>Thêm</h3></div></div><div class="list">${ADMIN_TABS.filter((t) => !MOBILE_ADMIN.includes(t[0])).map(([k, l, ic]) => `<button class="row" data-go="${k}"><span class="av soft">${I[ic]}</span><span class="nm">${l}</span>${I.chev}</button>`).join("")}</div>`);
@@ -231,7 +233,7 @@ function render() {
   const pg = $("#page");
   if (!S.d) { pg.innerHTML = header("Đang tải") + `<div class="grid g3"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>`; return; }
   const V = isAdmin()
-    ? { home: vHome, devices: vDevices, family: vFamily, wifi: vWifi, rules: vRules, data: vData, log: vLog, settings: vSettings }
+    ? { home: vHome, devices: vDevices, cameras: vCameras, family: vFamily, wifi: vWifi, rules: vRules, data: vData, log: vLog, settings: vSettings }
     : { home: vParentHome, devices: vParentDevices, wifi: vWifiParent, settings: vSettings };
   const fn = V[S.tab] || V.home;
   const keepQ = document.activeElement?.id === "q" ? document.activeElement.selectionStart : null;
@@ -705,9 +707,193 @@ function confirmBox(title, msg, ok, danger) {
   });
 }
 
+/* ---------- Trang: Camera WebRTC (go2rtc) & Đèn thông minh (admin) ---------- */
+const CAM_NAMES = {
+  ezviz_ty1: "Ezviz TY1 (Phòng / Trong nhà)",
+  ezviz_c3w_1: "Ezviz C3W 1",
+  ezviz_c3w_2: "Ezviz C3W 2",
+  ezviz_h3c_2: "Ezviz H3c 2",
+  ezviz_h3c_3: "Ezviz H3c 3",
+};
+
+function destroyCamPcs() {
+  Object.values(S.cam.pcs).forEach((pc) => { try { pc.close(); } catch {} });
+  S.cam.pcs = {};
+}
+
+let _sirenTimer = null;
+function toggleWebSiren(on) {
+  S.cam.alarmOn = on;
+  if (_sirenTimer) { clearInterval(_sirenTimer); _sirenTimer = null; }
+  if (!on) return;
+  const beep = () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx(), o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "sawtooth";
+      o.frequency.setValueAtTime(750, ctx.currentTime);
+      o.frequency.linearRampToValueAtTime(1150, ctx.currentTime + 0.25);
+      o.frequency.linearRampToValueAtTime(750, ctx.currentTime + 0.5);
+      g.gain.setValueAtTime(0.18, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.55);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(); o.stop(ctx.currentTime + 0.58);
+    } catch {}
+  };
+  beep();
+  _sirenTimer = setInterval(() => { if (S.cam.alarmOn) beep(); }, 800);
+}
+
+async function loadCameras() {
+  if (!isAdmin()) return;
+  destroyCamPcs();
+  S.cam.loading = true; S.cam.error = null;
+  if (S.tab === "cameras") render();
+  try {
+    const cfg = await api("/cam/config");
+    S.cam.gatewayUrl = cfg.gatewayUrl || "";
+    S.cam.tuya = cfg.tuya || { configured: false, devices: [] };
+    if (S.cam.gatewayUrl) {
+      const r = await fetch(`${S.cam.gatewayUrl}/api/streams`, { signal: AbortSignal.timeout(7000) });
+      if (!r.ok) throw new Error(`Gateway phản hồi lỗi ${r.status}`);
+      const data = await r.json();
+      S.cam.streams = Object.keys(data || {});
+    } else {
+      S.cam.streams = [];
+    }
+  } catch (e) {
+    S.cam.error = e.message || "Không kết nối được Camera Gateway ở nhà";
+    S.cam.streams = [];
+  }
+  S.cam.loading = false;
+  if (S.tab === "cameras") { render(); mountWebRtcAll(); }
+}
+
+async function startWebRtc(src, video, stat) {
+  if (!video || !S.cam.gatewayUrl) return;
+  try {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    S.cam.pcs[src] = pc;
+    pc.addTransceiver("video", { direction: "recvonly" });
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    pc.ontrack = (ev) => {
+      if (video.srcObject !== ev.streams[0]) video.srcObject = ev.streams[0];
+      if (stat) stat.className = "chip ok", stat.innerHTML = `<span class="dot"></span>Realtime`;
+    };
+    pc.onconnectionstatechange = () => {
+      if ((pc.connectionState === "failed" || pc.connectionState === "disconnected") && stat) {
+        stat.className = "chip bad"; stat.innerHTML = `<span class="dot"></span>Mất luồng`;
+      }
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const res = await fetch(`${S.cam.gatewayUrl}/api/webrtc?src=${encodeURIComponent(src)}`, {
+      method: "POST",
+      body: offer.sdp,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const sdp = await res.text();
+    await pc.setRemoteDescription({ type: "answer", sdp });
+  } catch (e) {
+    if (stat) { stat.className = "chip bad"; stat.innerHTML = `<span class="dot"></span>Lỗi luồng`; }
+  }
+}
+
+function mountWebRtcAll() {
+  if (!S.cam.gatewayUrl || !S.cam.streams.length) return;
+  S.cam.streams.forEach((src) => {
+    const v = $("#cam-v-" + src), st = $("#cam-st-" + src);
+    if (v) startWebRtc(src, v, st);
+  });
+}
+
+function vCameras() {
+  const c = S.cam;
+  const netCams = (S.d?.known || []).filter((k) => k.kind === "camera");
+  const tuyaCard = c.tuya?.configured ? `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-h"><h2>Đèn & Công tắc thông minh (Tuya)</h2><div class="grow"></div><span class="chip">${(c.tuya.devices || []).length}</span></div>
+      ${c.tuya.error ? `<div class="alert bad">${I.alert}<div>${esc(c.tuya.error)}</div></div>` : ""}
+      <div class="list">${(c.tuya.devices || []).map((d) => `
+        <div class="row">
+          <span class="av" style="background:${d.on ? "var(--warn)" : "var(--dim)"}">${I.light}</span>
+          <div style="min-width:0"><div class="nm">${esc(d.name)}</div><div class="meta">${d.online ? "Online" : "Offline"}</div></div>
+          <div class="rr"><button class="switch ${d.on ? "on" : ""}" data-tuya-id="${esc(d.id)}" data-tuya-code="${esc(d.code)}" data-tuya-name="${esc(d.name)}" ${d.online ? "" : "disabled"}></button></div>
+        </div>`).join("") || `<div class="empty">Chưa có đèn/công tắc Tuya nào</div>`}
+      </div>
+    </div>` : "";
+
+  return header("Camera & Đèn", `<button class="btn sm ${c.alarmOn ? "red" : ""}" id="cam-siren">${I.alert}${c.alarmOn ? "Tắt còi báo động" : "Phát còi cảnh báo"}</button>`) +
+    tuyaCard + `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-h"><h2>Kết nối Camera Gateway (WebRTC 0 độ trễ)</h2><div class="grow"></div>${c.gatewayUrl ? `<span class="chip ${c.error ? "bad" : "ok"}"><span class="dot"></span>${c.error ? "Offline" : "Đã nối"}</span>` : `<span class="chip warn">Chưa gắn link</span>`}</div>
+      <form class="cam-url" id="cam-gw-form">
+        <input id="cam-gw-in" value="${esc(c.gatewayUrl)}" placeholder="Dán link Tunnel của go2rtc (vd: https://xxx.trycloudflare.com)">
+        <button class="btn pri" type="submit">Lưu & Kết nối</button>
+      </form>
+      <div class="meta" style="margin-top:8px">Ở nhà: chạy <code>~/.go2rtc/start.sh</code> trên MacBook (hoặc Mini PC 24/7) để lấy link <code>trycloudflare.com</code> dán vào đây — xem WebRTC trễ &lt;0,5s từ mọi nơi.</div>
+    </div>` +
+    (c.error ? `<div class="alert bad" style="margin-bottom:16px">${I.alert}<div><b>Không kết nối được Camera Gateway</b><br>${esc(c.error)}</div></div>` : "") +
+    (c.loading ? `<div class="grid g3"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>` :
+      c.streams.length ? `<div class="cam-grid" style="margin-bottom:16px">${c.streams.map((src) => `
+        <div class="card cam-card">
+          <div class="cam-h">
+            <b>${esc(CAM_NAMES[src] || src)}</b>
+            <div class="grow"></div>
+            <span class="chip" id="cam-st-${esc(src)}"><span class="dot"></span>Đang nối…</span>
+          </div>
+          <div class="cam-box"><video id="cam-v-${esc(src)}" autoplay playsinline muted></video></div>
+          <div class="cam-bar">
+            <button class="btn sm" data-cam-mute="${esc(src)}">Bật tiếng</button>
+            <button class="btn sm" data-cam-retry="${esc(src)}">${I.refresh}Nối lại</button>
+            <button class="btn sm" data-cam-fs="${esc(src)}">${I.eye}Phóng to</button>
+          </div>
+        </div>`).join("")}</div>` : `
+        <div class="card">
+          <div class="card-h"><h2>Camera trong mạng nhà (Ruijie)</h2><span class="chip">${netCams.length}</span></div>
+          <div class="list">${netCams.map((k) => `<div class="row"><span class="av" style="background:${floorC(k.floor)}">${I.camera}</span><div style="min-width:0"><div class="nm">${esc(k.name)}</div><div class="meta">${esc(k.floor || "—")} · ${esc(k.vendor || "EZVIZ")} · ${esc(fmtMac(k.mac))}</div></div></div>`).join("") || `<div class="empty">Chưa có dữ liệu camera</div>`}</div>
+        </div>`);
+}
+
+function bindCameras(root) {
+  const sr = $("#cam-siren", root);
+  if (sr) sr.onclick = () => { toggleWebSiren(!S.cam.alarmOn); render(); mountWebRtcAll(); };
+  const gf = $("#cam-gw-form", root);
+  if (gf) gf.onsubmit = async (e) => {
+    e.preventDefault();
+    const url = $("#cam-gw-in", root)?.value?.trim() || "";
+    await act(gf.querySelector("button"), async () => { await api("/cam/config", { body: { gatewayUrl: url } }); await loadCameras(); }, "Đã lưu Camera Gateway").catch(() => {});
+  };
+  $$("[data-tuya-id]", root).forEach((b) => (b.onclick = async () => {
+    const on = !b.classList.contains("on");
+    b.classList.add("busy"); b.classList.toggle("on", on);
+    try { await api("/cam/tuya", { body: { id: b.dataset.tuyaId, code: b.dataset.tuyaCode, name: b.dataset.tuyaName, on } }); toast(`${on ? "Đã bật" : "Đã tắt"} ${b.dataset.tuyaName}`); }
+    catch (e) { b.classList.toggle("on", !on); toast(e.message, 1); }
+    b.classList.remove("busy");
+  }));
+  $$("[data-cam-mute]", root).forEach((b) => (b.onclick = () => {
+    const v = $("#cam-v-" + b.dataset.camMute);
+    if (!v) return;
+    v.muted = !v.muted;
+    b.textContent = v.muted ? "Bật tiếng" : "Tắt tiếng";
+  }));
+  $$("[data-cam-retry]", root).forEach((b) => (b.onclick = () => {
+    const src = b.dataset.camRetry;
+    try { S.cam.pcs[src]?.close(); } catch {}
+    startWebRtc(src, $("#cam-v-" + src), $("#cam-st-" + src));
+  }));
+  $$("[data-cam-fs]", root).forEach((b) => (b.onclick = () => {
+    const v = $("#cam-v-" + b.dataset.camFs);
+    if (v?.requestFullscreen) v.requestFullscreen().catch(() => {});
+  }));
+}
+
 /* ---------- Gắn sự kiện ---------- */
 function bind(root) {
   bindNet(root);
+  bindCameras(root);
   $$("[data-go]", root).forEach((b) => (b.onclick = () => go(b.dataset.go)));
   $$("[data-dev]", root).forEach((b) => (b.onclick = (e) => { if (e.target.closest("[data-unblock-dev]")) return; devSheet(b.dataset.dev); }));
   $$("[data-unblock-dev]", root).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); act(b, async () => { await api("/unblock", { body: { target: { kind: "device", id: b.dataset.unblockDev } } }); await load(); }, "Đã mở chặn").catch(() => {}); }));

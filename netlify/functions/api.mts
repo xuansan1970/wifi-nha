@@ -4,6 +4,7 @@ import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
 import { exec, Usage } from "./lib/engine.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
+import { listTuyaDevices, toggleTuyaDevice } from "./lib/tuya.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import {
   addLog, getLog, isIotDevice, isParentHiddenSsid, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
@@ -255,6 +256,35 @@ export default async (req: Request) => {
       return json(await view(60_000, s))
     }
     if (path === "/log") return json({ log: await getLog() })
+
+    // ---- Camera WebRTC (go2rtc) & Đèn thông minh Tuya (chỉ Xuân San) ----
+    if (path === "/cam/config" && m === "GET") {
+      needAdmin(s)
+      const cfg = await getJSON<{ gatewayUrl?: string }>("cam_config", {})
+      const gatewayUrl = (cfg.gatewayUrl || process.env.CAM_GATEWAY_URL || "").replace(/\/$/, "")
+      let tuya: any = { configured: false, devices: [] }
+      try { tuya = await listTuyaDevices() } catch (e: any) { tuya = { configured: true, error: e?.message || String(e), devices: [] } }
+      return json({ gatewayUrl, tuya })
+    }
+    if (path === "/cam/config" && m === "POST") {
+      needAdmin(s)
+      const raw = String(body.gatewayUrl || "").trim().replace(/\/$/, "")
+      if (raw && !/^https?:\/\/.+/.test(raw)) throw new Http(400, "URL gateway phải bắt đầu bằng https:// hoặc http://")
+      await setJSON("cam_config", { gatewayUrl: raw })
+      await L([{ t: Date.now(), ok: true, by: s.name, text: raw ? `Cập nhật Camera Gateway: ${raw}` : "Xoá Camera Gateway" }])
+      return json({ ok: true, gatewayUrl: raw })
+    }
+    if (path === "/cam/tuya" && m === "POST") {
+      needAdmin(s)
+      const id = String(body.id || "").trim()
+      const code = String(body.code || "switch_1").trim()
+      const name = String(body.name || id).trim()
+      const on = Boolean(body.on)
+      if (!id) throw new Http(400, "Thiếu ID thiết bị")
+      await toggleTuyaDevice(id, code, on)
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `${on ? "Bật" : "Tắt"} ${name}` }])
+      return json({ ok: true })
+    }
 
     // ---- chặn / mở (Ba Mẹ cũng dùng được) ----
     if (path === "/block" && m === "POST") {
