@@ -8,7 +8,7 @@
 [[headers]]
   for = "/*"
   [headers.values]
-    X-Frame-Options = "SAMEORIGIN"
+    Content-Security-Policy = "frame-ancestors 'self' https://nha-minh.giadinhxuan.workers.dev"
     Referrer-Policy = "no-referrer"
     X-Content-Type-Options = "nosniff"
 
