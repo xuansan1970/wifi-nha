@@ -137,8 +137,8 @@ function startPolling() {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { S.lastHidden = Date.now(); return; }
   if (!S.me) return;
-  // Ba Mẹ: rời app > 5 phút thì khoá lại, tránh các em cầm máy vào được
-  if (S.me.role === "parent" && S.lastHidden && Date.now() - S.lastHidden > 5 * 60000) { lockNow(); return; }
+  // Tài khoản Ba Mẹ (mọi tài khoản trừ Xuân San): rời app > 5 phút thì khoá lại, tránh các em cầm máy vào được
+  if (S.me.uid !== "san" && S.lastHidden && Date.now() - S.lastHidden > 5 * 60000) { lockNow(); return; }
   if (Date.now() - S.at > 10000) load();
 });
 async function lockNow() { const uid = S.me?.uid; try { await api("/logout", { method: "POST" }); } catch {} S.me = null; S.d = null; renderLogin(uid); }
@@ -528,7 +528,7 @@ function vLog() {
   return header("Nhật ký") + `<div class="card">${S.log.length ? `<div class="list fade-list">${S.log.slice(0, 150).map((l) => `<div class="row" style="cursor:default"><span class="av ${l.ok ? "" : ""}" style="background:${l.ok ? "var(--ok-soft)" : "var(--bad-soft)"};color:${l.ok ? "var(--ok)" : "var(--bad)"}">${l.ok ? I.clock : I.alert}</span><div style="min-width:0"><div style="font-weight:500">${esc(l.text)}</div><div class="meta">${esc(l.by)} · ${timeVN(l.t)} · ${ago(l.t)}</div></div><span></span></div>`).join("")}</div>` : `<div class="empty"><b>Chưa có hoạt động</b>Mọi thao tác bấm tay và hẹn giờ sẽ ghi ở đây.</div>`}</div>`;
 }
 function vSettings() {
-  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Phụ huynh — khoá/mở mạng các con, khởi động lại router"}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${!isAdmin() ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
+  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Phụ huynh — khoá/mở mạng các con, khởi động lại router"}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${S.me.uid !== "san" ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
   ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Mã PIN</h2></div><p class="meta" style="margin-bottom:12px">Nên đổi PIN khác năm sinh để các em không đoán được.</p><div id="acc" class="list"><div class="meta">Đang tải…</div></div></div>
   <div class="card"><div class="card-h"><h2>Cài lên màn hình chính</h2></div><p class="meta">iPhone: Safari → Chia sẻ → <b>Thêm vào MH chính</b>. Android: Chrome → ⋮ → <b>Cài đặt ứng dụng</b>. Mở như app, toàn màn hình.</p></div>` : ""}</div>`;
 }

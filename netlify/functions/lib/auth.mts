@@ -19,7 +19,22 @@ const hashPin = (pin: string, salt: string) => scryptSync(pin, salt, 32).toStrin
 // Khởi tạo tài khoản lần đầu từ biến APP_USERS: "id:Tên:role:PIN;..."
 export async function loadUsers(): Promise<User[]> {
   const cur = await getJSON<User[] | null>("users", null)
-  if (cur?.length) return cur
+  if (cur?.length) {
+    // Quyền (role) luôn lấy theo APP_USERS để đổi quyền chỉ cần sửa biến môi trường; PIN giữ nguyên
+    const roles = new Map(
+      (Netlify.env.get("APP_USERS") || "").split(";").map((x) => x.split(":")).filter((p) => p.length === 4).map((p) => [p[0], p[2]]),
+    )
+    let changed = false
+    for (const u of cur) {
+      const r = roles.get(u.id) === "admin" ? "admin" : roles.has(u.id) ? "parent" : u.role
+      if (r !== u.role) {
+        u.role = r
+        changed = true
+      }
+    }
+    if (changed) await setJSON("users", cur)
+    return cur
+  }
   const seed = Netlify.env.get("APP_USERS") || ""
   const users: User[] = seed
     .split(";")
