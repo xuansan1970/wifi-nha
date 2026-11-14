@@ -6,7 +6,7 @@ import {
   addLog, blockMacs, labelOf, loadDevices, loadMeta, LogItem, macsOf, mutate, nextMidnightVN, loadState, rebootGroups,
   Rule, State, Target, unblockMacs, vn,
 } from "./state.mts"
-import { getJSON, setJSON } from "./store.mts"
+import { getJSON, isKvLimit, setJSON } from "./store.mts"
 
 export type Action =
   | { kind: "reboot"; gids: number[]; label: string }
@@ -107,10 +107,11 @@ async function quotas(s: State, online: Set<string>, minutes: number, now: numbe
       }
     }
   }
+  if (online.size === 0 && u.date === date && !qs.length) return
   await setJSON("usage", u)
 }
 
-// Mỗi phút: lịch đến hạn (bù tối đa 10′), mở chặn hết hạn, đếm giờ online, làm mới dữ liệu nền
+// Mỗi 5 phút: lịch đến hạn (bù tối đa 10′), mở chặn hết hạn, đếm giờ online, làm mới dữ liệu nền
 export async function tick(now = Date.now()) {
   const s = await loadState()
   const minute = Math.floor(now / 60000) * 60000
@@ -118,9 +119,6 @@ export async function tick(now = Date.now()) {
   const start = s.lastTick ? Math.max(s.lastTick + 60000, minute - 10 * 60000) : minute
   const actions: Action[] = []
   for (let m = start; m <= minute; m += 60000) actions.push(...dueAt(s.rules, m))
-  await mutate((x) => {
-    x.lastTick = minute
-  })
 
   const logs: LogItem[] = []
   for (const a of actions) logs.push(await exec(a, "Hẹn giờ"))
@@ -138,17 +136,17 @@ export async function tick(now = Date.now()) {
   }
 
   const hasQuota = s.rules.some((r) => r.enabled && r.type === "quota")
+  const hasActiveSchedules = s.rules.some((r) => r.enabled) || s.temps.length > 0
   const gap = s.lastSnap ? now - s.lastSnap : Infinity
-  if (gap >= (hasQuota ? 55_000 : 175_000)) {
+  let nextLastSnap: number | undefined
+  if (gap >= (hasQuota ? 290_000 : 590_000)) {
     try {
       const snap = await buildSnapshot()
-      await mutate((x) => {
-        x.lastSnap = snap.at
-      })
+      nextLastSnap = snap.at
       const online = new Set<string>()
       for (const r of snap.routers) for (const c of r.clients) online.add(c.mac)
-      const mins = Math.min(5, Math.max(1, Math.round((gap === Infinity ? 60000 : gap) / 60000)))
-      await quotas(await loadState(), online, mins, now, logs)
+      const mins = Math.min(10, Math.max(1, Math.round((gap === Infinity ? 60000 : gap) / 60000)))
+      await quotas(s, online, mins, now, logs)
     } catch (e: any) {
       console.error("snapshot", e.message)
     }
@@ -157,6 +155,19 @@ export async function tick(now = Date.now()) {
       await ensureOui()
     } catch (e: any) {
       console.error("oui", e.message)
+    }
+  }
+
+  // Chỉ ghi KV "state" một lần nếu có lịch đang bật hoặc vừa cập nhật snapshot (tránh đốt quota KV free)
+  if (hasActiveSchedules || nextLastSnap !== undefined) {
+    try {
+      await mutate((x) => {
+        x.lastTick = minute
+        if (nextLastSnap !== undefined) x.lastSnap = nextLastSnap
+      })
+    } catch (e: any) {
+      if (!isKvLimit(e)) throw e
+      console.warn("KV 429 skipped for state tick")
     }
   }
   await addLog(logs)

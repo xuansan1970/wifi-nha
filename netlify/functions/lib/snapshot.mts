@@ -136,7 +136,24 @@ async function build(): Promise<Snapshot> {
   }
 
   // Thiết bị bị chặn (đang offline) vẫn cần tên → lấy từ sổ thiết bị
-  await saveDevices(devices)
+  // Chỉ ghi KV "devices" khi có thay đổi thực sự hoặc đã quá 30 phút chưa cập nhật lastSeen
+  const prevDevices = await loadDevices()
+  const devicesChanged = Object.keys(devices).some((mac) => {
+    const prev = prevDevices[mac]
+    const cur = devices[mac]
+    if (!prev) return true
+    if (now - (prev.lastSeen ?? 0) >= 30 * 60_000 && cur.lastSeen !== prev.lastSeen) return true
+    return (
+      prev.gid !== cur.gid ||
+      prev.floor !== cur.floor ||
+      prev.ssid !== cur.ssid ||
+      prev.ip !== cur.ip ||
+      prev.name !== cur.name ||
+      prev.kind !== cur.kind ||
+      prev.vendor !== cur.vendor
+    )
+  })
+  if (devicesChanged) await saveDevices(devices)
   const snap: Snapshot = { at: Date.now(), routers, errors: allErrors }
   await setJSON("snapshot", snap)
   return snap

@@ -9,7 +9,7 @@ binding = "ASSETS"
 run_worker_first = ["/api/*", "/app.js", "/app.css", "/sw.js", "/"]
 
 [triggers]
-crons = ["* * * * *"]
+crons = ["*/5 * * * *"]
 
 [[kv_namespaces]]
 binding = "KV"

@@ -29,6 +29,8 @@ const I = {
   eye: P('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
   user: P('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
   bell: P('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0"/>'),
+  sun: P('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>'),
+  moon: P('<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>'),
   globe: P('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
   // loại thiết bị
   phone: P('<rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/>'),
@@ -144,6 +146,7 @@ async function load(mode) {
     } else {
       render();
     }
+    if (S.d?.routers) { const on = S.d.routers.filter((r) => r.online).length, n = S.d.routers.length, bl = S.d.blocked?.length || 0; toHub(`${on}/${n} router online · ${S.d.routers.reduce((a, r) => a + (r.clients?.length || 0), 0)} thiết bị`, on === n ? "ok" : "warn", on < n ? `${n - on} router mất kết nối` : bl ? `${bl} thiết bị đang chặn` : ""); }
   })();
   return inflight;
 }
@@ -162,6 +165,7 @@ async function lockNow() { destroyCamPcs(); toggleWebSiren(false); const uid = S
 
 /* ---------- Đăng nhập ---------- */
 async function renderLogin(pre) {
+  toHub("Chưa đăng nhập", "idle");
   clearInterval(S.poll);
   let users = [];
   try { users = (await api("/users")).users; } catch (e) { users = []; }
@@ -208,10 +212,11 @@ function shell() {
       ${T.map(([k, l, ic]) => `<button class="nav ${S.tab === k ? "on" : ""}" data-tab="${k}" data-tip="${l}">${I[ic]}<span>${l}</span>${k === "devices" && blockedN ? `<span class="badge">${blockedN}</span>` : ""}</button>`).join("")}
       <div class="grow"></div>
       ${isAdmin() ? `<button class="nav" id="bell" data-tip="Thông báo">${I.bell}<span>Thông báo</span>${S.d?.notif?.unread ? `<span class="badge">${S.d.notif.unread}</span>` : ""}</button>` : ""}
-      <div class="me"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><b>${esc(S.me.name)}</b><small>${isAdmin() ? "Quản trị" : "Phụ huynh"}</small></div><button class="btn ghost sm icon" id="lo" title="Đăng xuất">${I.out}</button></div>
+      <button class="nav" id="themeBtn" data-tip="Giao diện">${getTheme() === "dark" ? I.sun : I.moon}<span>${getTheme() === "dark" ? "Chế độ Sáng" : "Chế độ Tối"}</span></button>
+      <div class="me"><span class="av round" style="background:var(--pri);color:var(--pri-ink)">${esc(ini(S.me.name))}</span><div><b>${esc(S.me.name)}</b><small>${isAdmin() ? "Quản trị" : "Phụ huynh"}</small></div><button class="btn ghost sm icon" id="lo" title="Đăng xuất">${I.out}</button></div>
     </aside>
     <div>
-      <header class="mtop" id="mtop"><img src="/icon.svg" alt=""><b id="mt">WiFi Nhà</b>${isAdmin() ? `<button class="btn ghost icon" id="bell2" aria-label="Thông báo" style="position:relative">${I.bell}${S.d?.notif?.unread ? `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px">${S.d.notif.unread}</span>` : ""}</button>` : ""}<button class="btn ghost icon" id="rf2" aria-label="Làm mới">${I.refresh}</button></header>
+      <header class="mtop" id="mtop"><img src="/icon.svg" alt=""><b id="mt">WiFi Nhà</b><button class="btn ghost icon" id="themeBtn2" aria-label="Đổi giao diện">${getTheme() === "dark" ? I.sun : I.moon}</button>${isAdmin() ? `<button class="btn ghost icon" id="bell2" aria-label="Thông báo" style="position:relative">${I.bell}${S.d?.notif?.unread ? `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px">${S.d.notif.unread}</span>` : ""}</button>` : ""}<button class="btn ghost icon" id="rf2" aria-label="Làm mới">${I.refresh}</button></header>
       <main class="main"><div class="page" id="page"></div></main>
     </div>
     <nav class="tabbar">${mob.map(([k, l, ic]) => `<button class="${S.tab === k || (k === "more" && moreOn) ? "on" : ""}" data-tab="${k}">${I[ic]}${l}${k === "devices" && blockedN ? `<span class="badge">${blockedN}</span>` : ""}</button>`).join("")}</nav>
@@ -220,6 +225,8 @@ function shell() {
   $("#lo").onclick = lockNow;
   if ($("#bell")) $("#bell").onclick = notifSheet;
   if ($("#bell2")) $("#bell2").onclick = notifSheet;
+  if ($("#themeBtn")) $("#themeBtn").onclick = () => toggleTheme();
+  if ($("#themeBtn2")) $("#themeBtn2").onclick = () => toggleTheme();
   $("#rf2").onclick = () => refresh($("#rf2"));
   window.onscroll = () => $("#mtop")?.classList.toggle("scrolled", scrollY > 4);
 }
@@ -1127,8 +1134,8 @@ function bind(root) {
   $$("[data-re]", root).forEach((b) => (b.onclick = () => ruleSheet(S.d.rules.find((x) => x.id === b.dataset.re))));
   $$("[data-rd]", root).forEach((b) => (b.onclick = async () => { if (await confirmBox("Xoá lịch này?", "Lịch sẽ không chạy nữa.", "Xoá", true)) act(b, async () => { await api("/rules/" + b.dataset.rd, { method: "DELETE" }); await load(); }, "Đã xoá lịch").catch(() => {}); }));
   // dữ liệu
-  const ej = $("#exj"); if (ej) ej.onclick = () => download(`wifi-nha-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ snapshot: S.d, inventory: S.inv }, null, 2), "application/json");
-  const ec = $("#exc"); if (ec) ec.onclick = () => { const rows = [["Tên", "Tầng", "Loại", "Hãng", "Của ai", "WiFi", "MAC", "Lần đầu", "Lần cuối"], ...(S.d.known || []).map((k) => [k.name, k.floor, S.d.kinds?.[k.kind] || k.kind, k.vendor, person(k.owner)?.name || "", k.ssid, fmtMac(k.mac), timeVN(k.firstSeen), timeVN(k.lastSeen)])]; download(`thiet-bi-${new Date().toISOString().slice(0, 10)}.csv`, "﻿" + rows.map((r) => r.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n"), "text/csv"); };
+  const ej = $("#exj"); if (ej) ej.onclick = () => download(`wifi-nha-${new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10)}.json`, JSON.stringify({ snapshot: S.d, inventory: S.inv }, null, 2), "application/json");
+  const ec = $("#exc"); if (ec) ec.onclick = () => { const rows = [["Tên", "Tầng", "Loại", "Hãng", "Của ai", "WiFi", "MAC", "Lần đầu", "Lần cuối"], ...(S.d.known || []).map((k) => [k.name, k.floor, S.d.kinds?.[k.kind] || k.kind, k.vendor, person(k.owner)?.name || "", k.ssid, fmtMac(k.mac), timeVN(k.firstSeen), timeVN(k.lastSeen)])]; download(`thiet-bi-${new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10)}.csv`, "﻿" + rows.map((r) => r.map((x) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n"), "text/csv"); };
   // cài đặt
   const l2 = $("#lo2"); if (l2) l2.onclick = lockNow;
   if ($("#acc")) loadAccounts();
@@ -1144,3 +1151,37 @@ async function boot() {
   try { const r = await api("/me"); S.me = r.me; boot(); } catch { if (!S.me) renderLogin(); }
 })();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+
+/* ---------- Cầu nối app tổng Nhà Mình: trạng thái + đồng bộ Sáng/Tối ---------- */
+const HUB_ORIGIN = "https://nha-minh.giadinhxuan.workers.dev";
+let hubLast = "";
+function toHub(line, tone, alert) {
+  if (window.parent === window) return;
+  const msg = { type: "nhaminh:status", line: String(line || ""), tone: tone || "idle", alert: alert || "" };
+  const k = JSON.stringify(msg);
+  if (k === hubLast) return;
+  hubLast = k;
+  try { window.parent.postMessage(msg, HUB_ORIGIN); } catch {}
+}
+function getTheme() { return document.documentElement.dataset.theme === "dark" ? "dark" : "light"; }
+function applyTheme(t, notifyHub = false) {
+  const next = t === "dark" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  document.documentElement.style.colorScheme = next;
+  const meta = document.getElementById("metaTheme");
+  if (meta) meta.content = next === "dark" ? "#0F0F0F" : "#F2F4F7";
+  try { localStorage.setItem("nm_theme", next); } catch {}
+  if (notifyHub && window.parent !== window) {
+    try { window.parent.postMessage({ type: "nhaminh:theme", theme: next }, HUB_ORIGIN); } catch {}
+  }
+  const b1 = $("#themeBtn"), b2 = $("#themeBtn2");
+  if (b1) b1.innerHTML = `${next === "dark" ? I.sun : I.moon}<span>${next === "dark" ? "Chế độ Sáng" : "Chế độ Tối"}</span>`;
+  if (b2) b2.innerHTML = next === "dark" ? I.sun : I.moon;
+}
+function toggleTheme() { applyTheme(getTheme() === "dark" ? "light" : "dark", true); }
+window.addEventListener("message", (e) => {
+  if (e.origin !== HUB_ORIGIN || !e.data) return;
+  if (e.data.type === "nhaminh:theme" && (e.data.theme === "light" || e.data.theme === "dark")) {
+    applyTheme(e.data.theme, false);
+  }
+});

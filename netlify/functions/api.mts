@@ -166,6 +166,10 @@ export default async (req: Request) => {
   const url = new URL(req.url)
   const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/"
   const m = req.method
+  // Cookie SameSite=None (để chạy trong app tổng Nhà Mình) → chặn request ghi từ trang lạ
+  const origin = req.headers.get("origin")
+  if (m !== "GET" && origin && origin !== url.origin && origin !== "https://nha-minh.giadinhxuan.workers.dev")
+    return new Response(JSON.stringify({ error: "Nguồn không hợp lệ" }), { status: 403, headers: { "content-type": "application/json" } })
   const body: any = m === "GET" || m === "DELETE" ? {} : await req.json().catch(() => ({}))
 
   try {
