@@ -1,6 +1,7 @@
 import * as R from "./ruijie.mts"
 import { buildSnapshot, patchSnapshot } from "./snapshot.mts"
 import { ensureOui } from "./smart.mts"
+import { tickFamily } from "./family.mts"
 import {
   addLog, blockMacs, labelOf, loadDevices, loadMeta, LogItem, macsOf, mutate, nextMidnightVN, loadState, rebootGroups,
   Rule, State, Target, unblockMacs, vn,
@@ -123,6 +124,11 @@ export async function tick(now = Date.now()) {
 
   const logs: LogItem[] = []
   for (const a of actions) logs.push(await exec(a, "Hẹn giờ"))
+  try {
+    logs.push(...(await tickFamily(start, minute, now)))
+  } catch (e: any) {
+    console.error("family", e.message)
+  }
 
   for (const x of s.temps.filter((t) => t.until <= now)) {
     const i = x.key.indexOf(":")

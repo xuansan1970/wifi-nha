@@ -162,3 +162,10 @@ export function isIotDevice(d: { ssid?: string; kind?: string } | undefined, iot
   if (!d) return false
   return IOT_KINDS.includes(d.kind || "") || (!!d.ssid && iotSsids.has(d.ssid))
 }
+
+// WiFi riêng của Xuân San: giấu khỏi Ba Mẹ, không bị bật/tắt bởi "Mạng gia đình" hay lịch của Ba Mẹ
+export const PRIVATE_SSIDS = ["OGA-528DBD"]
+export const isPrivateSsid = (s: { name?: string }) =>
+  PRIVATE_SSIDS.some((n) => n.toLowerCase() === String(s.name || "").trim().toLowerCase())
+// Ba Mẹ không thấy: WiFi IoT/ẩn + WiFi riêng của Xuân San
+export const isParentHiddenSsid = (s: { name?: string; hidden?: boolean }) => isIotSsid(s) || isPrivateSsid(s)

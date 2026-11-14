@@ -1,11 +1,12 @@
 import type { Config } from "@netlify/functions"
+import { cleanRule as cleanNetRule, endGrant, familyView, grant, loadFamily, NetRule, saveRules, setNet } from "./lib/family.mts"
 import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
 import { exec, Usage } from "./lib/engine.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import {
-  addLog, getLog, isIotDevice, isIotSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
+  addLog, getLog, isIotDevice, isParentHiddenSsid, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
 import { getJSON, setJSON } from "./lib/store.mts"
 
@@ -120,7 +121,7 @@ async function view(snapMaxAge: number, s: Session) {
     .sort((a, b) => b.lastSeen - a.lastSeen)
   const parent = s.role !== "admin"
   const iotSsids = new Set<string>()
-  snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isIotSsid(x) && iotSsids.add(x.name)))
+  snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isParentHiddenSsid(x) && iotSsids.add(x.name)))
   const iotMac = (mac: string) => isIotDevice(devices[mac], iotSsids)
   // Ba Mẹ: giấu WiFi IoT/ẩn và mọi thiết bị IoT, không cần thông tin kỹ thuật
   const routers = parent
@@ -133,11 +134,11 @@ async function view(snapMaxAge: number, s: Session) {
         device: null,
         devices: [],
         blocked: r.blocked.filter((m: string) => !iotMac(m)),
-        ssids: r.ssids.filter((x: any) => !isIotSsid(x)),
+        ssids: r.ssids.filter((x: any) => !isParentHiddenSsid(x)),
         clients: r.clients.filter((c: any) => !iotSsids.has(c.ssid) && !iotMac(c.mac)),
         errors: [],
       }))
-    : snap.routers
+    : snap.routers.map((r: any) => ({ ...r, ssids: r.ssids.map((x: any) => ({ ...x, private: isPrivateSsid(x) })) }))
   let notif: any = null
   if (!parent) {
     const [log, seen] = await Promise.all([getLog(), getJSON<number>(`seen-${s.uid}`, 0)])
@@ -157,6 +158,7 @@ async function view(snapMaxAge: number, s: Session) {
     known: parent ? known.filter((k) => !iotMac(k.mac)) : known,
     usage: usage.date === today ? usage.m : {},
     kinds: KIND_VI,
+    net: await familyView(),
   }
 }
 
@@ -195,7 +197,7 @@ export default async (req: Request) => {
 
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout"].includes(path))
+    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules"].includes(path) && !path.startsWith("/net/rules/"))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -203,7 +205,7 @@ export default async (req: Request) => {
       if (!parent || target.kind !== "device") return
       const [snap, devices] = await Promise.all([getSnapshot(10 * 60_000), loadDevices()])
       const iot = new Set<string>()
-      snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isIotSsid(x) && iot.add(x.name)))
+      snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isParentHiddenSsid(x) && iot.add(x.name)))
       if (isIotDevice(devices[target.id], iot)) throw new Http(403, "Thiết bị IoT chỉ Xuân San chỉnh được")
     }
 
@@ -288,13 +290,54 @@ export default async (req: Request) => {
       return json({ ok: true })
     }
 
+    // ---- Mạng gia đình (Ba Mẹ + Xuân San) ----
+    if (path === "/net/toggle" && m === "POST") {
+      const log = await setNet(!!body.on, s.name)
+      await L([log])
+      if (!log.ok) throw new Http(502, log.text)
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path === "/net/grant" && m === "POST") {
+      const minutes = Number(body.minutes)
+      if (![30, 60, 120].includes(minutes)) throw new Http(400, "Chỉ cho thêm 30 phút, 1 hoặc 2 tiếng")
+      const log = await grant(minutes, s.name)
+      await L([log])
+      if (!log.ok) throw new Http(502, log.text)
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path === "/net/grant/end" && m === "POST") {
+      const log = await endGrant(s.name, `${s.name} kết thúc giờ dùng thêm`)
+      if (log) await L([log])
+      if (log && !log.ok) throw new Http(502, log.text)
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path === "/net/rules" && m === "POST") {
+      let r: NetRule
+      try {
+        r = cleanNetRule(body)
+      } catch (e: any) {
+        throw new Http(400, e.message)
+      }
+      const exists = (await loadFamily()).rules.some((x) => x.id === r.id)
+      await saveRules((rules) => (exists ? rules.map((x) => (x.id === r.id ? r : x)) : [...rules, r].slice(-20)))
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `${exists ? "Sửa" : "Thêm"} lịch mạng “${r.name}”: tắt ${r.offAt} → mở ${r.onAt}${r.enabled ? "" : " (đang tắt lịch)"}` }])
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path.startsWith("/net/rules/") && m === "DELETE") {
+      const id = path.slice("/net/rules/".length)
+      const r = (await loadFamily()).rules.find((x) => x.id === id)
+      await saveRules((rules) => rules.filter((x) => x.id !== id))
+      if (r) await L([{ t: Date.now(), ok: true, by: s.name, text: `Xoá lịch mạng “${r.name}”` }])
+      return json({ ok: true, net: await familyView() })
+    }
+
     if (path === "/wifi/toggle" && m === "POST") {
       const gid = Number(body.gid)
       if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
       if (parent) {
         const snap = await getSnapshot(10 * 60_000)
         const ss = snap.routers.find((r: any) => r.gid === gid)?.ssids.find((x: any) => x.id === Number(body.ssidId))
-        if (!ss || isIotSsid(ss)) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
+        if (!ss || isParentHiddenSsid(ss)) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
       }
       const log = await exec(
         { kind: "wifi", enable: !!body.enable, targets: [{ gid, ssidIds: [Number(body.ssidId)] }], label: String(body.name || "").slice(0, 40) },

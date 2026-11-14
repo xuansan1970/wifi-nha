@@ -57,7 +57,7 @@ const ini = (n) => String(n || "?").trim().split(/\s+/).map((w) => w[0]).slice(-
 /* ---------- Trạng thái ---------- */
 const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0 };
 const ADMIN_TABS = [["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["family", "Gia đình", "family"], ["wifi", "WiFi", "wifi"], ["rules", "Hẹn giờ", "clock"], ["data", "Dữ liệu", "db"], ["log", "Nhật ký", "log"], ["settings", "Cài đặt", "gear"]];
-const PARENT_TABS = [["home", "Nhà mình", "home"], ["wifi", "WiFi", "wifi"], ["settings", "Tài khoản", "user"]];
+const PARENT_TABS = [["home", "Nhà mình", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["settings", "Tài khoản", "user"]];
 const MOBILE_ADMIN = ["home", "devices", "family", "wifi", "more"];
 const isAdmin = () => S.me?.role === "admin";
 const tabs = () => (isAdmin() ? ADMIN_TABS : PARENT_TABS);
@@ -232,7 +232,7 @@ function render() {
   if (!S.d) { pg.innerHTML = header("Đang tải") + `<div class="grid g3"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>`; return; }
   const V = isAdmin()
     ? { home: vHome, devices: vDevices, family: vFamily, wifi: vWifi, rules: vRules, data: vData, log: vLog, settings: vSettings }
-    : { home: vParentHome, wifi: vWifiParent, settings: vSettings };
+    : { home: vParentHome, devices: vParentDevices, wifi: vWifiParent, settings: vSettings };
   const fn = V[S.tab] || V.home;
   const keepQ = document.activeElement?.id === "q" ? document.activeElement.selectionStart : null;
   pg.innerHTML = fn();
@@ -250,7 +250,7 @@ function vHome() {
   const R = S.d.routers, cl = clients();
   const on = R.filter((r) => r.online).length;
   const err = S.d.errors?.length ? `<div class="alert bad">${I.alert}<div><b>Một số dữ liệu chưa tải được</b><br>${esc(S.d.errors[0])}</div></div>` : "";
-  return header("Tổng quan") + err + `
+  return header("Tổng quan") + err + netHero() + `
   <div class="grid g4" style="margin-bottom:16px">
     ${kpi(I.router, "Router online", `${on}/${R.length}`, on === R.length ? "Tất cả hoạt động" : "Có router mất kết nối", on === R.length ? "var(--ok)" : "var(--bad)")}
     ${kpi(I.devices, "Thiết bị online", cl.length, `${cl.filter((c) => c.kind !== "iot" && c.kind !== "camera").length} máy dùng · ${cl.filter((c) => c.kind === "iot" || c.kind === "camera").length} IoT`, "var(--pri)")}
@@ -402,7 +402,7 @@ function vWifi() {
   return header("Mạng WiFi", `<button class="btn pri" id="wadd">${I.plus}<span>Tạo WiFi</span></button>`) + `
   <div class="alert">${I.eye}<div>WiFi <b>ẩn</b> (IoT cho camera, hub…) vẫn hoạt động bình thường, chỉ không hiện khi dò WiFi. Tắt nhầm WiFi IoT sẽ làm camera mất kết nối.</div></div>
   <div class="grid g3">${S.d.routers.map((r) => `<div class="card"><div class="card-h"><span class="floor-ic" style="background:${floorC(r.floor)};width:36px;height:36px;border-radius:11px">${I.router}</span><div><h2>${esc(r.floor)}</h2><small>${esc(r.name)}</small></div></div>
-    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div>
+    <div class="list">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto auto"><div style="min-width:0"><div class="nm">${esc(s.name)}</div><div class="meta">${s.bands.join(" · ")}${s.hidden ? " · <b>ẩn</b>" : ""}${s.iot ? " · IoT" : ""}${s.private ? ` · <span class="chip pri" style="height:20px">Riêng của bạn</span>` : ""} · ${r.clients.filter((c) => c.ssid === s.name).length} máy</div></div>
       <div style="display:flex"><button class="btn ghost sm icon" data-wedit="${s.id}" data-gid="${r.gid}" aria-label="Cài đặt">${I.gear}</button><button class="btn ghost sm icon" data-wdel="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" aria-label="Xoá">${I.trash}</button></div>
       <button class="sw ${s.enable ? "on" : ""}" role="switch" aria-checked="${s.enable}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot ? 1 : 0}"></button></div>`).join("") || '<div class="empty">Không đọc được WiFi</div>'}</div></div>`).join("")}</div>`;
 }
@@ -534,7 +534,7 @@ function vLog() {
   return header("Nhật ký") + `<div class="card">${S.log.length ? `<div class="list fade-list">${S.log.slice(0, 150).map((l) => `<div class="row" style="cursor:default"><span class="av ${l.ok ? "" : ""}" style="background:${l.ok ? "var(--ok-soft)" : "var(--bad-soft)"};color:${l.ok ? "var(--ok)" : "var(--bad)"}">${l.ok ? I.clock : I.alert}</span><div style="min-width:0"><div style="font-weight:500">${esc(l.text)}</div><div class="meta">${esc(l.by)} · ${timeVN(l.t)} · ${ago(l.t)}</div></div><span></span></div>`).join("")}</div>` : `<div class="empty"><b>Chưa có hoạt động</b>Mọi thao tác bấm tay và hẹn giờ sẽ ghi ở đây.</div>`}</div>`;
 }
 function vSettings() {
-  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — xem máy đang vào mạng, khoá/mở, bật/tắt WiFi"}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${S.me.uid !== "san" ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
+  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — bật/tắt mạng, hẹn giờ, cho dùng thêm, xem và khoá máy"}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${S.me.uid !== "san" ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
   ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Mã PIN</h2></div><p class="meta" style="margin-bottom:12px">Nên đổi PIN khác năm sinh để các em không đoán được.</p><div id="acc" class="list"><div class="meta">Đang tải…</div></div></div>
   <div class="card"><div class="card-h"><h2>Cài lên màn hình chính</h2></div><p class="meta">iPhone: Safari → Chia sẻ → <b>Thêm vào MH chính</b>. Android: Chrome → ⋮ → <b>Cài đặt ứng dụng</b>. Mở như app, toàn màn hình.</p></div>` : ""}</div>`;
 }
@@ -585,17 +585,102 @@ async function ewebSheet(gid, label) {
   if ($("#ewc")) $("#ewc").onclick = () => act($("#ewc"), async () => { await api("/eweb/close", { body: { gid } }); closeSheet(); }, "Đã đóng eWeb").catch(() => {});
 }
 
+/* ---------- Mạng gia đình (Ba Mẹ + Xuân San) ---------- */
+const hmVN = (t) => new Date(t).toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", hour12: false });
+function dayWord(t) {
+  const k = (x) => new Date(x).toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
+  const d = k(t), today = k(Date.now()), tmr = k(Date.now() + 86400000);
+  if (d === today) return "hôm nay";
+  if (d === tmr) return "ngày mai";
+  return DAYS[new Date(t + 7 * 3600000).getUTCDay()];
+}
+function netHero() {
+  const n = S.d.net; if (!n) return "";
+  const on = n.on, g = n.grant;
+  const sub = g ? `Đang cho dùng thêm · còn <b class="num">${left(g.until)}</b> (đến ${hmVN(g.until)}), sau đó tự về chế độ`
+    : n.next ? `Theo lịch: tự <b>${n.next.on ? "mở" : "tắt"}</b> lúc <b class="num">${hmVN(n.next.at)}</b> ${dayWord(n.next.at)}`
+    : n.rules.some((r) => r.enabled) ? "Đang theo lịch" : "Chưa đặt lịch tắt mạng";
+  return `<section class="card net ${on ? "is-on" : "is-off"}${g ? " is-grant" : ""}" style="margin-bottom:16px">
+    <button class="pwr" id="netpw" role="switch" aria-checked="${on}" aria-label="${on ? "Tắt" : "Bật"} mạng gia đình">${I.power}</button>
+    <div class="net-t">
+      <div class="lbl" style="margin:0">Mạng gia đình</div>
+      <div class="net-st">${on ? (g ? "Đang dùng thêm" : "Đang bật") : "Đang tắt"}</div>
+      <div class="meta">${sub}</div>
+    </div>
+    <div class="net-g">
+      <div class="lbl" style="margin:0 0 6px">${g ? "Cho thêm nữa" : on ? "Cho dùng thêm (bỏ qua lịch tắt)" : "Cho dùng tạm"}</div>
+      <div class="opts">${[[30, "30 phút"], [60, "1 tiếng"], [120, "2 tiếng"]].map(([m, l]) => `<button class="opt" data-grant="${m}">${l}</button>`).join("")}${g ? `<button class="opt end" id="gend">Kết thúc ngay</button>` : ""}</div>
+    </div>
+    <div class="net-note meta">Camera, thiết bị nhà thông minh không bị ảnh hưởng.</div>
+  </section>`;
+}
+function netRulesCard() {
+  const R = S.d.net?.rules || [];
+  return `<div class="card" style="margin-bottom:16px"><div class="card-h"><h2>Hẹn giờ tắt mạng</h2><div class="grow"></div><button class="btn sm pri" id="nradd">${I.plus}<span>Thêm</span></button></div>
+  ${R.length ? `<div class="list">${R.map((r) => `<div class="row" style="cursor:default;grid-template-columns:auto minmax(0,1fr) auto;opacity:${r.enabled ? 1 : .55}"><span class="av soft">${I.clock}</span><div style="min-width:0"><div class="nm num" style="font-size:17px">Tắt ${esc(r.offAt)} → mở ${esc(r.onAt)}</div><div class="meta" style="margin:2px 0 6px">${esc(r.name)}</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="${r.days.includes(d) ? "on" : ""}">${DAYS[d]}</span>`).join("")}</div></div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><button class="sw ${r.enabled ? "on" : ""}" role="switch" aria-checked="${r.enabled}" aria-label="Bật/tắt lịch" data-nrt="${r.id}"></button><div style="display:flex"><button class="btn ghost sm icon" data-nre="${r.id}" aria-label="Sửa">${I.edit}</button><button class="btn ghost sm icon" data-nrd="${r.id}" aria-label="Xoá">${I.trash}</button></div></div></div>`).join("")}</div>`
+    : `<div class="empty"><b>Chưa có lịch</b>Ví dụ: tắt mạng 22:00 → mở 6:00 mỗi ngày.</div>`}</div>`;
+}
+function netRuleSheet(init) {
+  const f = Object.assign({ name: "", days: [0, 1, 2, 3, 4, 5, 6], offAt: "22:00", onAt: "06:00", enabled: true }, JSON.parse(JSON.stringify(init || {})));
+  const PRE = [["Giờ ngủ", "22:00", "06:00", [0, 1, 2, 3, 4, 5, 6]], ["Giờ học tối", "19:00", "21:00", [1, 2, 3, 4, 5]], ["Nghỉ trưa", "12:00", "13:30", [0, 1, 2, 3, 4, 5, 6]]];
+  const draw = () => {
+    sheet(`<div class="grab"></div><div class="sheet-h"><div class="t"><h3>${f.id ? "Sửa lịch" : "Hẹn giờ tắt mạng"}</h3><p>Đến giờ tắt, mọi WiFi gia đình tự tắt; đến giờ mở tự bật lại.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
+      ${f.id ? "" : `<div class="field"><label class="lbl">Chọn nhanh</label><div class="opts" id="pre">${PRE.map(([n, a, b], i) => `<button class="opt" data-p="${i}">${n} ${a}–${b}</button>`).join("")}</div></div>`}
+      <div class="field two"><div><label class="lbl">Tắt mạng lúc</label><input class="inp" type="time" id="t1" value="${f.offAt}"></div><div><label class="lbl">Mở lại lúc</label><input class="inp" type="time" id="t2" value="${f.onAt}"></div></div>
+      <div class="hint" style="margin:-6px 0 12px">Giờ mở nhỏ hơn giờ tắt = mở vào sáng hôm sau.</div>
+      <div class="field"><label class="lbl">Ngày trong tuần</label><div class="opts" id="dy">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="opt ${f.days.includes(d) ? "on" : ""}" data-d="${d}" style="min-width:48px">${DAYS[d]}</button>`).join("")}</div></div>
+      <div class="field"><label class="lbl">Tên lịch</label><input class="inp" id="nm" maxlength="40" value="${esc(f.name)}" placeholder="vd: Giờ ngủ"></div>
+      <div class="foot"><button class="btn" data-close>Huỷ</button><button class="btn pri" id="nrs">Lưu lịch</button></div>`);
+    $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
+    const sync = () => { f.offAt = $("#t1").value; f.onAt = $("#t2").value; f.name = $("#nm").value; };
+    if ($("#pre")) $("#pre").onclick = (e) => { const b = e.target.closest("[data-p]"); if (!b) return; const [n, a, c, d] = PRE[Number(b.dataset.p)]; Object.assign(f, { name: n, offAt: a, onAt: c, days: [...d] }); draw(); };
+    $("#dy").onclick = (e) => { const b = e.target.closest("[data-d]"); if (!b) return; const d = Number(b.dataset.d); f.days = f.days.includes(d) ? f.days.filter((x) => x !== d) : [...f.days, d]; b.classList.toggle("on"); };
+    $("#nrs").onclick = () => { sync(); if (!f.days.length) return toast("Chọn ít nhất 1 ngày", 1); if (f.offAt === f.onAt) return toast("Giờ tắt và giờ mở phải khác nhau", 1);
+      act($("#nrs"), async () => { const r = await api("/net/rules", { body: f }); S.d.net = r.net; closeSheet(); render(); }, "Đã lưu lịch").catch(() => {}); };
+  };
+  draw();
+}
+function bindNet(root) {
+  const pw = $("#netpw", root);
+  if (pw) pw.onclick = async () => {
+    const on = S.d.net.on;
+    if (on && !(await confirmBox("Tắt mạng gia đình?", "Mọi điện thoại, máy tính trong nhà sẽ mất WiFi tới khi bật lại. Camera và thiết bị nhà thông minh vẫn chạy.<br><br>Điện thoại Ba Mẹ cũng mất WiFi — app này vẫn dùng được bằng 4G.", "Tắt mạng", true))) return;
+    pw.classList.add("busy");
+    try { const r = await api("/net/toggle", { body: { on: !on }, timeout: 30000 }); S.d.net = r.net; toast(`${on ? "Đã tắt" : "Đã bật"} mạng gia đình · router áp dụng sau ~30 giây`); render(); }
+    catch (e) { toast(e.message, 1); pw.classList.remove("busy"); }
+  };
+  $$("[data-grant]", root).forEach((b) => (b.onclick = () => { const m = Number(b.dataset.grant);
+    act(b, async () => { const r = await api("/net/grant", { body: { minutes: m }, timeout: 30000 }); S.d.net = r.net; render(); }, `Đã cho dùng thêm ${m >= 60 ? m / 60 + " tiếng" : m + " phút"}`).catch(() => {}); }));
+  const ge = $("#gend", root); if (ge) ge.onclick = async () => { if (!(await confirmBox("Kết thúc giờ dùng thêm?", "Mạng sẽ quay về đúng chế độ ngay (đang trong giờ tắt thì tắt luôn).", "Kết thúc", true))) return; act(ge, async () => { const r = await api("/net/grant/end", { method: "POST", timeout: 30000 }); S.d.net = r.net; render(); }, "Đã kết thúc giờ dùng thêm").catch(() => {}); };
+  const ad = $("#nradd", root); if (ad) ad.onclick = () => netRuleSheet();
+  $$("[data-nre]", root).forEach((b) => (b.onclick = () => netRuleSheet(S.d.net.rules.find((x) => x.id === b.dataset.nre))));
+  $$("[data-nrt]", root).forEach((b) => (b.onclick = async () => { const r = S.d.net.rules.find((x) => x.id === b.dataset.nrt); b.classList.add("busy"); try { const x = await api("/net/rules", { body: { ...r, enabled: !r.enabled } }); S.d.net = x.net; render(); } catch (e) { toast(e.message, 1); b.classList.remove("busy"); } }));
+  $$("[data-nrd]", root).forEach((b) => (b.onclick = async () => { if (await confirmBox("Xoá lịch này?", "Lịch sẽ không tự tắt/mở mạng nữa.", "Xoá", true)) act(b, async () => { const r = await api("/net/rules/" + b.dataset.nrd, { method: "DELETE" }); S.d.net = r.net; render(); }, "Đã xoá lịch").catch(() => {}); }));
+}
+
 /* ---------- Ba Mẹ: màn hình đơn giản ---------- */
 function vParentHome() {
+  const cl = clients();
+  const byKind = {}; cl.forEach((c) => { const k = c.kind || "unknown"; (byKind[k] = byKind[k] || { n: 0, vi: c.kindVi || "Khác" }).n++; });
+  const kinds = Object.entries(byKind).sort((a, b) => b[1].n - a[1].n);
+  const nb = S.d.blocked.length;
+  return header(`Chào ${esc(S.me.name)}`) + netHero() + `<div class="grid g2" style="align-items:start">${netRulesCard()}
+  <div class="card"><div class="card-h"><h2>Đang vào mạng</h2><div class="grow"></div><span class="chip ok">${cl.length} máy</span></div>
+    ${kinds.length ? `<div class="kinds">${kinds.map(([k, v]) => `<div class="kind"><span class="av soft">${kindIc(k)}</span><b class="num">${v.n}</b><span>${esc(v.vi)}</span></div>`).join("")}</div>` : `<div class="empty">Chưa có máy nào đang vào mạng</div>`}
+    ${nb ? `<div class="alert bad" style="margin:12px 0 0">${I.lock}<div><b>${nb} máy đang bị khoá</b></div></div>` : ""}
+    <button class="btn" data-go="devices" style="width:100%;margin-top:12px">${I.devices}Xem từng máy, khoá / mở</button></div></div>`;
+}
+function vParentDevices() {
   const bs = blockedSet();
   const cl = clients().sort((a, b) => a.floor.localeCompare(b.floor, "vi") || a.name.localeCompare(b.name, "vi"));
   const groups = {}; cl.forEach((c) => (groups[c.floor] = groups[c.floor] || []).push(c));
   const blocked = S.d.blocked;
-  return header(`Chào ${esc(S.me.name)}`) + `
+  return header("Thiết bị") + `<div class="alert" style="background:var(--pri-soft);color:#1e3a8a">${I.eye}<div>Tên máy do hệ thống tự nhận diện nên có thể chưa đúng. Không chắc thì nhìn <b>loại máy</b> và <b>tầng</b>.</div></div>
   ${S.d.people.length ? `<div class="grid g3 fade-list" style="margin-bottom:16px">${S.d.people.map(personCard).join("")}</div>` : ""}
   ${blocked.length ? `<div class="card" style="margin-bottom:16px"><div class="card-h"><h2>Đang bị khoá</h2><div class="grow"></div><span class="chip bad">${blocked.length}</span></div><div class="list">${blocked.map((b) => `<div class="row" style="cursor:default"><span class="av" style="background:var(--bad)">${kindIc(b.kind)}</span><div style="min-width:0"><div class="nm">${esc(b.name)}</div><div class="meta">${b.temp ? `Tự mở sau ${left(b.temp.until)}` : "Khoá đến khi mở"}</div></div><div class="rr"><button class="btn green" data-unblock-dev="${b.mac}">${I.unlock}Mở</button></div></div>`).join("")}</div></div>` : ""}
   <div class="card"><div class="card-h"><h2>Máy đang vào mạng</h2><div class="grow"></div><span class="chip ok">${cl.length}</span></div>
-  ${cl.length ? Object.entries(groups).map(([fl, arr]) => `<div class="lbl" style="margin:10px 0 2px;color:${floorC(fl)}">${esc(fl)}</div><div class="list">${arr.map((c) => `<div class="row" style="cursor:default"><span class="av" style="background:${bs.has(c.mac) ? "var(--bad)" : floorC(c.floor)}">${kindIc(c.kind)}</span><div style="min-width:0"><div class="nm">${esc(c.name)}</div><div class="meta">${esc(c.kindVi)}${person(c.owner) ? " · " + esc(person(c.owner).name) : ""}</div></div><div class="rr">${bs.has(c.mac) ? `<button class="btn green" data-unblock-dev="${c.mac}">${I.unlock}Mở</button>` : `<button class="btn red" data-pdev="${c.mac}" data-name="${esc(c.name)}">${I.lock}Khoá</button>`}</div></div>`).join("")}</div>`).join("") : `<div class="empty">Chưa có máy nào đang vào mạng</div>`}</div>`;
+  ${cl.length ? Object.entries(groups).map(([fl, arr]) => `<div class="lbl" style="margin:10px 0 2px;color:${floorC(fl)}">${esc(fl)} · ${arr.length}</div><div class="list">${arr.map((c) => `<div class="row" style="cursor:default"><span class="av" style="background:${bs.has(c.mac) ? "var(--bad)" : floorC(c.floor)}">${kindIc(c.kind)}</span><div style="min-width:0"><div class="nm">${esc(c.name)}</div><div class="meta">${esc(c.kindVi)}${person(c.owner) ? " · " + esc(person(c.owner).name) : ""}${c.since ? " · vào " + ago(c.since) : ""}</div></div><div class="rr">${bs.has(c.mac) ? `<button class="btn green" data-unblock-dev="${c.mac}">${I.unlock}Mở</button>` : `<button class="btn red" data-pdev="${c.mac}" data-name="${esc(c.name)}">${I.lock}Khoá</button>`}</div></div>`).join("")}</div>`).join("") : `<div class="empty">Chưa có máy nào đang vào mạng</div>`}</div>`;
 }
 function parentBlockSheet(mac, name) {
   sheet(`<div class="grab"></div><div class="sheet-h"><span class="av" style="background:var(--bad)">${I.lock}</span><div class="t"><h3>Khoá mạng</h3><p><b>${esc(name)}</b> sẽ không vào được WiFi nhà.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>${blockOpts()}<div class="foot"><button class="btn" data-close>Huỷ</button></div>`);
@@ -622,6 +707,7 @@ function confirmBox(title, msg, ok, danger) {
 
 /* ---------- Gắn sự kiện ---------- */
 function bind(root) {
+  bindNet(root);
   $$("[data-go]", root).forEach((b) => (b.onclick = () => go(b.dataset.go)));
   $$("[data-dev]", root).forEach((b) => (b.onclick = (e) => { if (e.target.closest("[data-unblock-dev]")) return; devSheet(b.dataset.dev); }));
   $$("[data-unblock-dev]", root).forEach((b) => (b.onclick = (e) => { e.stopPropagation(); act(b, async () => { await api("/unblock", { body: { target: { kind: "device", id: b.dataset.unblockDev } } }); await load(); }, "Đã mở chặn").catch(() => {}); }));
