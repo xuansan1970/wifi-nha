@@ -1,21 +1,8 @@
+# App đã chuyển sang Cloudflare Workers (wifi-nha.giadinhxuan.workers.dev).
+# Netlify chỉ còn chuyển hướng link cũ; không còn functions / cron để không điều khiển router song song.
 [build]
-  publish = "public"
-  functions = "netlify/functions"
-
-[functions]
-  node_bundler = "esbuild"
-
-[[headers]]
-  for = "/*"
-  [headers.values]
-    Content-Security-Policy = "frame-ancestors 'self' https://nha-minh.giadinhxuan.workers.dev"
-    Referrer-Policy = "no-referrer"
-    X-Content-Type-Options = "nosniff"
-
-[[headers]]
-  for = "/app.*"
-  [headers.values]
-    Cache-Control = "no-cache"
+  publish = "netlify-redirect"
+  functions = "netlify-redirect/no-functions"
 
 [[headers]]
   for = "/sw.js"

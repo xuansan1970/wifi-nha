@@ -729,7 +729,7 @@ function bindQuickWifi(root) {
     b.classList.remove("busy");
     if (bad.length) toast(`${bad.length}/${todo.length} tầng chưa đổi được: ${bad[0].reason?.message || ""}`, 1);
     else toast(`${want ? "Đã bật" : "Đã tắt"} ${g.name} · router áp dụng sau ~30 giây`);
-    render();
+    render(); load();
   }));
 }
 function netHero() {
@@ -783,12 +783,12 @@ function bindNet(root) {
     const on = S.d.net.on;
     if (on && !(await confirmBox("Tắt mạng gia đình?", "Mọi điện thoại, máy tính trong nhà sẽ mất WiFi tới khi bật lại. Camera và thiết bị nhà thông minh vẫn chạy.<br><br>Điện thoại Ba Mẹ cũng mất WiFi — app này vẫn dùng được bằng 4G.", "Tắt mạng", true))) return;
     pw.classList.add("busy");
-    try { const r = await api("/net/toggle", { body: { on: !on }, timeout: 30000 }); S.d.net = r.net; toast(`${on ? "Đã tắt" : "Đã bật"} mạng gia đình · router áp dụng sau ~30 giây`); render(); }
+    try { const r = await api("/net/toggle", { body: { on: !on }, timeout: 30000 }); S.d.net = r.net; load(); toast(`${on ? "Đã tắt" : "Đã bật"} mạng gia đình · router áp dụng sau ~30 giây`); render(); }
     catch (e) { toast(e.message, 1); pw.classList.remove("busy"); }
   };
   $$("[data-grant]", root).forEach((b) => (b.onclick = () => { const m = Number(b.dataset.grant);
-    act(b, async () => { const r = await api("/net/grant", { body: { minutes: m }, timeout: 30000 }); S.d.net = r.net; render(); }, `Đã cho dùng thêm ${m >= 60 ? m / 60 + " tiếng" : m + " phút"}`).catch(() => {}); }));
-  const ge = $("#gend", root); if (ge) ge.onclick = async () => { if (!(await confirmBox("Kết thúc giờ dùng thêm?", "Mạng sẽ quay về đúng chế độ ngay (đang trong giờ tắt thì tắt luôn).", "Kết thúc", true))) return; act(ge, async () => { const r = await api("/net/grant/end", { method: "POST", timeout: 30000 }); S.d.net = r.net; render(); }, "Đã kết thúc giờ dùng thêm").catch(() => {}); };
+    act(b, async () => { const r = await api("/net/grant", { body: { minutes: m }, timeout: 30000 }); S.d.net = r.net; render(); load(); }, `Đã cho dùng thêm ${m >= 60 ? m / 60 + " tiếng" : m + " phút"}`).catch(() => {}); }));
+  const ge = $("#gend", root); if (ge) ge.onclick = async () => { if (!(await confirmBox("Kết thúc giờ dùng thêm?", "Mạng sẽ quay về đúng chế độ ngay (đang trong giờ tắt thì tắt luôn).", "Kết thúc", true))) return; act(ge, async () => { const r = await api("/net/grant/end", { method: "POST", timeout: 30000 }); S.d.net = r.net; render(); load(); }, "Đã kết thúc giờ dùng thêm").catch(() => {}); };
   const ad = $("#nradd", root); if (ad) ad.onclick = () => netRuleSheet();
   $$("[data-nre]", root).forEach((b) => (b.onclick = () => netRuleSheet(S.d.net.rules.find((x) => x.id === b.dataset.nre))));
   $$("[data-nrt]", root).forEach((b) => (b.onclick = async () => { const r = S.d.net.rules.find((x) => x.id === b.dataset.nrt); b.classList.add("busy"); try { const x = await api("/net/rules", { body: { ...r, enabled: !r.enabled } }); S.d.net = x.net; render(); } catch (e) { toast(e.message, 1); b.classList.remove("busy"); } }));
@@ -1224,7 +1224,7 @@ function bind(root) {
     const on = b.classList.contains("on");
     if (on && !(await confirmBox(`Tắt “${esc(b.dataset.name)}”?`, b.dataset.iot === "1" ? "<b>Đây là WiFi IoT</b> — camera, hub, quạt… dùng mạng này sẽ mất kết nối." : "Thiết bị đang dùng WiFi này sẽ mất kết nối tới khi bật lại.", "Tắt WiFi", true))) return;
     b.classList.add("busy"); b.classList.toggle("on", !on);
-    try { await api("/wifi/toggle", { body: { gid: Number(b.dataset.gid), ssidId: Number(b.dataset.wt), enable: !on, name: b.dataset.name } }); const s = S.d.routers.find((r) => r.gid === Number(b.dataset.gid))?.ssids.find((x) => x.id === Number(b.dataset.wt)); if (s) s.enable = !on; toast(`${on ? "Đã tắt" : "Đã bật"} ${b.dataset.name} · router áp dụng sau ~30 giây`); }
+    try { await api("/wifi/toggle", { body: { gid: Number(b.dataset.gid), ssidId: Number(b.dataset.wt), enable: !on, name: b.dataset.name } }); const s = S.d.routers.find((r) => r.gid === Number(b.dataset.gid))?.ssids.find((x) => x.id === Number(b.dataset.wt)); if (s) s.enable = !on; toast(`${on ? "Đã tắt" : "Đã bật"} ${b.dataset.name} · router áp dụng sau ~30 giây`); load(); }
     catch (e) { b.classList.toggle("on", on); toast(e.message, 1); }
     b.classList.remove("busy");
   }));

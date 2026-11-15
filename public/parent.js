@@ -91,7 +91,7 @@ function timeSheet() {
 }
 
 function addTimer(when, btn, close) {
-  return act(btn, async () => { const r = await api("/net/timer", { body: { scene: PT.scene, ...when } }); S.d.net = r.net; if (close) closeSheet(); render(); }, `Đã hẹn ${SCENE_VERB[PT.scene]}`).catch(() => {});
+  return act(btn, async () => { const r = await api("/net/timer", { body: { scene: PT.scene, ...when } }); S.d.net = r.net; if (close) closeSheet(); render(); load(); }, `Đã hẹn ${SCENE_VERB[PT.scene]}`).catch(() => {});
 }
 
 function bindParent(root) {
@@ -174,7 +174,7 @@ function limitSheet(name) {
     $("#lsave").onclick = () => { sync(); if (!f.days.length) return toast("Chọn ít nhất 1 ngày", 1); const bad = f.wins.find(([a, b]) => !(a < b)); if (bad) return toast(`Khung ${bad[0]}–${bad[1]}: giờ kết thúc phải sau giờ bắt đầu`, 1);
       act($("#lsave"), async () => { const r = await api("/net/limits", { body: f, timeout: 45000 }); S.d.net = r.net; closeSheet(); load(); render(); }, "Đã lưu giờ dùng WiFi").catch(() => {}); };
     if ($("#ldel")) $("#ldel").onclick = async () => { if (!(await confirmBox(`Bỏ giới hạn “${esc(name)}”?`, "WiFi sẽ dùng tự do cả ngày. Nếu đang tắt do ngoài giờ thì bấm bật lại ở mục WiFi nhanh.", "Bỏ giới hạn", true))) return;
-      act(null, async () => { const r = await api("/net/limits/" + cur.id, { method: "DELETE" }); S.d.net = r.net; render(); }, "Đã bỏ giới hạn").catch(() => {}); };
+      act(null, async () => { const r = await api("/net/limits/" + cur.id, { method: "DELETE" }); S.d.net = r.net; render(); load(); }, "Đã bỏ giới hạn").catch(() => {}); };
   };
   draw();
 }

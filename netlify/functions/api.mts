@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions"
 import {
-  cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
+  cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, unghost, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
 } from "./lib/family.mts"
 import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
@@ -128,7 +128,7 @@ async function view(snapMaxAge: number, s: Session) {
     .sort((a, b) => b.lastSeen - a.lastSeen)
   const parent = s.role !== "admin"
   const iotSsids = new Set<string>()
-  snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => !isFamilySsid(r.gid, x, ghost) && !isPrivateSsid(x) && iotSsids.add(x.name)))
+  snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => !isFamilySsid(r.gid, x, ghost) && iotSsids.add(x.name)))
   const iotMac = (mac: string) => isIotDevice(devices[mac], iotSsids)
   // Ba Mẹ: giấu WiFi IoT/ẩn và mọi thiết bị IoT, không cần thông tin kỹ thuật
   const routers = parent
@@ -451,6 +451,7 @@ export default async (req: Request) => {
         const ss = snap.routers.find((r: any) => r.gid === gid)?.ssids.find((x: any) => x.id === Number(body.ssidId))
         if (!ss || !isFamilySsid(gid, ss, ghostSet(await loadFamily()))) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
       }
+      if (body.enable) await unghost(gid, Number(body.ssidId)).catch(() => {})
       const log = await exec(
         { kind: "wifi", enable: !!body.enable, targets: [{ gid, ssidIds: [Number(body.ssidId)] }], label: String(body.name || "").slice(0, 40) },
         s.name,

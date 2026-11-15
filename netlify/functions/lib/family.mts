@@ -299,6 +299,16 @@ export async function endGrant(by: string, reason: string): Promise<LogItem | nu
   }
 }
 
+// Bật lẻ 1 WiFi đang bị ẩn do "giả lỗi" → hiện tên lại và bỏ khỏi danh sách giả lỗi
+export async function unghost(gid: number, ssidId: number) {
+  const f = await loadFamily()
+  if (!ghostSet(f).has(gk(gid, ssidId))) return
+  await R.updateSsid(gid, ssidId, { hidden: false })
+  f.ghost = byGid(f.ghost.map((t) => ({ gid: t.gid, ssidIds: t.ssidIds.filter((id) => !(t.gid === gid && id === ssidId)) })))
+  await saveFamily(f)
+  await patchSnapshot((sn) => { for (const r of sn.routers) if (r.gid === gid) for (const x of r.ssids) if (x.id === ssidId) x.hidden = false })
+}
+
 export async function saveLimits(fn: (l: Limit[]) => Limit[]) {
   const f = await loadFamily()
   f.limits = fn(f.limits).slice(0, 20)
