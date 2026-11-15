@@ -1,12 +1,14 @@
 import type { Config } from "@netlify/functions"
-import { cleanRule as cleanNetRule, endGrant, familyView, grant, loadFamily, NetRule, saveRules, setNet } from "./lib/family.mts"
+import {
+  cleanRule as cleanNetRule, cleanTimer, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
+} from "./lib/family.mts"
 import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
 import { exec, Usage } from "./lib/engine.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import {
-  addLog, getLog, isIotDevice, isParentHiddenSsid, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
+  addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
 import { cacheGet, cachePut, envGet, getJSON, isKvLimit, setJSON } from "./lib/store.mts"
 
@@ -28,6 +30,9 @@ const uid = () => crypto.randomUUID().slice(0, 8)
 async function gids() {
   return (await R.listProjects()).map((p: any) => p.gid as number)
 }
+
+// Ba Mẹ được đặt lịch theo người/thiết bị (giờ nghỉ, giới hạn giờ/ngày); lịch khởi động lại router / tắt WiFi lẻ chỉ Xuân San
+const PARENT_RULES = ["block", "quota"]
 
 function needAdmin(s: Session) {
   if (s.role !== "admin") throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
@@ -85,13 +90,15 @@ async function cleanRule(b: any, all: number[]): Promise<Rule> {
 
 // Dữ liệu gửi cho giao diện: ảnh chụp + người + chặn tạm + mức dùng hôm nay
 async function view(snapMaxAge: number, s: Session) {
-  const [snap, st, meta, devices, usage] = await Promise.all([
+  const [snap, st, meta, devices, usage, fam] = await Promise.all([
     getSnapshot(snapMaxAge),
     loadState(),
     loadMeta(),
     loadDevices(),
     getJSON<Usage>("usage", { date: "", m: {}, hit: {} }),
+    loadFamily(),
   ])
+  const ghost = ghostSet(fam)
   const today = vn(Date.now()).date
   const blockedMacs = new Set<string>()
   snap.routers.forEach((r: any) => r.blocked.forEach((m: string) => blockedMacs.add(m)))
@@ -121,7 +128,7 @@ async function view(snapMaxAge: number, s: Session) {
     .sort((a, b) => b.lastSeen - a.lastSeen)
   const parent = s.role !== "admin"
   const iotSsids = new Set<string>()
-  snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isParentHiddenSsid(x) && iotSsids.add(x.name)))
+  snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => !isFamilySsid(r.gid, x, ghost) && !isPrivateSsid(x) && iotSsids.add(x.name)))
   const iotMac = (mac: string) => isIotDevice(devices[mac], iotSsids)
   // Ba Mẹ: giấu WiFi IoT/ẩn và mọi thiết bị IoT, không cần thông tin kỹ thuật
   const routers = parent
@@ -134,11 +141,11 @@ async function view(snapMaxAge: number, s: Session) {
         device: null,
         devices: [],
         blocked: r.blocked.filter((m: string) => !iotMac(m)),
-        ssids: r.ssids.filter((x: any) => !isParentHiddenSsid(x)),
+        ssids: r.ssids.filter((x: any) => isFamilySsid(r.gid, x, ghost)).map((x: any) => ({ ...x, ghost: ghost.has(`${r.gid}:${x.id}`) })),
         clients: r.clients.filter((c: any) => !iotSsids.has(c.ssid) && !iotMac(c.mac)),
         errors: [],
       }))
-    : snap.routers.map((r: any) => ({ ...r, ssids: r.ssids.map((x: any) => ({ ...x, private: isPrivateSsid(x) })) }))
+    : snap.routers.map((r: any) => ({ ...r, ssids: r.ssids.map((x: any) => ({ ...x, private: isPrivateSsid(x), ghost: ghost.has(`${r.gid}:${x.id}`) })) }))
   let notif: any = null
   if (!parent) {
     const [log, seen] = await Promise.all([getLog(), getJSON<number>(`seen-${s.uid}`, 0)])
@@ -153,12 +160,12 @@ async function view(snapMaxAge: number, s: Session) {
     notif,
     people: st.people,
     temps: st.temps,
-    rules: parent ? [] : st.rules,
+    rules: parent ? st.rules.filter((r) => PARENT_RULES.includes(r.type)) : st.rules,
     blocked: parent ? blocked.filter((b) => !iotMac(b.mac)) : blocked,
     known: parent ? known.filter((k) => !iotMac(k.mac)) : known,
     usage: usage.date === today ? usage.m : {},
     kinds: KIND_VI,
-    net: await familyView(),
+    net: await familyView(snap),
   }
 }
 
@@ -223,7 +230,7 @@ export default async (req: Request) => {
 
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/cam/config", "/cam/log"].includes(path) && !path.startsWith("/net/rules/"))
+    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/cam/config", "/cam/log", "/device", "/people", "/rules"].includes(path) && !/^\/(net\/rules|net\/timer|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -231,7 +238,8 @@ export default async (req: Request) => {
       if (!parent || target.kind !== "device") return
       const [snap, devices] = await Promise.all([getSnapshot(10 * 60_000), loadDevices()])
       const iot = new Set<string>()
-      snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => isParentHiddenSsid(x) && iot.add(x.name)))
+      const g = ghostSet(await loadFamily())
+      snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => !isFamilySsid(r.gid, x, g) && iot.add(x.name)))
       if (isIotDevice(devices[target.id], iot)) throw new Http(403, "Thiết bị IoT chỉ Xuân San chỉnh được")
     }
 
@@ -360,6 +368,32 @@ export default async (req: Request) => {
       if (log && !log.ok) throw new Http(502, log.text)
       return json({ ok: true, net: await familyView() })
     }
+    if (path === "/net/scene" && m === "POST") {
+      const scene = body.scene as Scene
+      if (!SCENES.includes(scene)) throw new Http(400, "Kịch bản không hợp lệ")
+      const log = await setScene(scene, s.name)
+      await L([log])
+      if (!log.ok) throw new Http(502, log.text)
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path === "/net/timer" && m === "POST") {
+      let t
+      try {
+        t = cleanTimer(body, s.name)
+      } catch (e: any) {
+        throw new Http(400, e.message)
+      }
+      await saveTimers((ts) => [...ts, t])
+      const lbl = { on: "mở toàn bộ mạng", off: "tắt toàn bộ mạng", ghost: "giả lỗi mạng" }[t.scene]
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Hẹn ${lbl} lúc ${vn(t.at).hm}` }])
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path.startsWith("/net/timer/") && m === "DELETE") {
+      const id = path.slice("/net/timer/".length)
+      await saveTimers((ts) => ts.filter((x) => x.id !== id))
+      await L([{ t: Date.now(), ok: true, by: s.name, text: "Huỷ một hẹn giờ mạng" }])
+      return json({ ok: true, net: await familyView() })
+    }
     if (path === "/net/rules" && m === "POST") {
       let r: NetRule
       try {
@@ -386,7 +420,7 @@ export default async (req: Request) => {
       if (parent) {
         const snap = await getSnapshot(10 * 60_000)
         const ss = snap.routers.find((r: any) => r.gid === gid)?.ssids.find((x: any) => x.id === Number(body.ssidId))
-        if (!ss || isParentHiddenSsid(ss)) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
+        if (!ss || !isFamilySsid(gid, ss, ghostSet(await loadFamily()))) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
       }
       const log = await exec(
         { kind: "wifi", enable: !!body.enable, targets: [{ gid, ssidIds: [Number(body.ssidId)] }], label: String(body.name || "").slice(0, 40) },
@@ -396,6 +430,84 @@ export default async (req: Request) => {
       if (!log.ok) throw new Http(502, log.text)
       return json({ ok: true })
     }
+    // ---- Gia đình: người, thiết bị, giờ nghỉ, giới hạn giờ (Ba Mẹ cũng dùng được) ----
+    if (path === "/device" && m === "POST") {
+      if (!isMac(body.mac)) throw new Http(400, "MAC không hợp lệ")
+      const mac = R.macKey(body.mac)
+      await guardIot({ kind: "device", id: mac })
+      const meta = await loadMeta()
+      const cur = (meta[mac] = meta[mac] ?? {})
+      if ("name" in body) {
+        const name = String(body.name || "").trim().slice(0, 40)
+        if (name) cur.custom = name
+        else delete cur.custom
+        // đồng bộ tên lên Ruijie để app Reyee cũng thấy
+        const d = (await loadDevices())[mac]
+        if (name && d?.gid) await R.renameClient(d.gid, mac, name).catch(() => {})
+      }
+      if ("owner" in body) {
+        const st = await loadState()
+        if (body.owner && !st.people.some((p) => p.id === body.owner)) throw new Http(400, "Không có người này")
+        if (body.owner) cur.owner = String(body.owner)
+        else delete cur.owner
+      }
+      if (!cur.custom && !cur.owner) delete meta[mac]
+      await saveMeta(meta)
+      return json({ ok: true })
+    }
+
+    if (path === "/people" && m === "POST") {
+      const name = String(body.name || "").trim().slice(0, 30)
+      if (!name) throw new Http(400, "Nhập tên")
+      const p = await mutate((st) => {
+        const ex = st.people.find((x) => x.id === body.id)
+        if (ex) {
+          ex.name = name
+          return ex
+        }
+        const np = { id: uid(), name, color: st.people.length % 6 }
+        st.people.push(np)
+        return np
+      })
+      return json({ ok: true, person: p })
+    }
+    const pm = path.match(/^\/people\/([\w-]+)$/)
+    if (pm && m === "DELETE") {
+      await mutate((st) => {
+        st.people = st.people.filter((p) => p.id !== pm[1])
+        st.rules = st.rules.filter((r) => !(r.target?.kind === "person" && r.target.id === pm[1]))
+      })
+      const meta = await loadMeta()
+      for (const k of Object.keys(meta)) if (meta[k].owner === pm[1]) delete meta[k].owner
+      await saveMeta(meta)
+      return json({ ok: true })
+    }
+
+    if (path === "/rules" && m === "POST") {
+      if (parent && !PARENT_RULES.includes(body.type)) throw new Http(403, "Loại lịch này chỉ Xuân San đặt được")
+      const rule = await cleanRule(body, await gids())
+      if (rule.target) await guardIot(rule.target)
+      if (parent && (await loadState()).rules.some((r) => r.id === rule.id && !PARENT_RULES.includes(r.type))) throw new Http(403, "Lịch này chỉ Xuân San sửa được")
+      await mutate((st) => {
+        const i = st.rules.findIndex((r) => r.id === rule.id)
+        if (i >= 0) st.rules[i] = rule
+        else st.rules.push(rule)
+      })
+      return json({ ok: true, rule })
+    }
+    const rm = path.match(/^\/rules\/([\w-]+)(\/toggle)?$/)
+    if (rm) {
+      await mutate((st) => {
+        const r = st.rules.find((x) => x.id === rm[1])
+        if (!r) throw new Http(404, "Không tìm thấy lịch")
+        if (parent && !PARENT_RULES.includes(r.type)) throw new Http(403, "Lịch này chỉ Xuân San sửa được")
+        if (m === "DELETE") st.rules = st.rules.filter((x) => x.id !== rm[1])
+        else if (rm[2] && m === "POST") r.enabled = !r.enabled
+        else throw new Http(405, "Không hỗ trợ")
+      })
+      return json({ ok: true })
+    }
+
     // ---------- chỉ admin ----------
     needAdmin(s)
 
@@ -473,78 +585,6 @@ export default async (req: Request) => {
       await R.deleteSsid(gid, Number(body.ssidId))
       await L([{ t: Date.now(), ok: true, by: s.name, text: `Xoá WiFi “${String(body.name || body.ssidId)}”` }])
       await buildSnapshot().catch(() => {})
-      return json({ ok: true })
-    }
-
-    if (path === "/device" && m === "POST") {
-      if (!isMac(body.mac)) throw new Http(400, "MAC không hợp lệ")
-      const mac = R.macKey(body.mac)
-      const meta = await loadMeta()
-      const cur = (meta[mac] = meta[mac] ?? {})
-      if ("name" in body) {
-        const name = String(body.name || "").trim().slice(0, 40)
-        if (name) cur.custom = name
-        else delete cur.custom
-        // đồng bộ tên lên Ruijie để app Reyee cũng thấy
-        const d = (await loadDevices())[mac]
-        if (name && d?.gid) await R.renameClient(d.gid, mac, name).catch(() => {})
-      }
-      if ("owner" in body) {
-        const st = await loadState()
-        if (body.owner && !st.people.some((p) => p.id === body.owner)) throw new Http(400, "Không có người này")
-        if (body.owner) cur.owner = String(body.owner)
-        else delete cur.owner
-      }
-      if (!cur.custom && !cur.owner) delete meta[mac]
-      await saveMeta(meta)
-      return json({ ok: true })
-    }
-
-    if (path === "/people" && m === "POST") {
-      const name = String(body.name || "").trim().slice(0, 30)
-      if (!name) throw new Http(400, "Nhập tên")
-      const p = await mutate((st) => {
-        const ex = st.people.find((x) => x.id === body.id)
-        if (ex) {
-          ex.name = name
-          return ex
-        }
-        const np = { id: uid(), name, color: st.people.length % 6 }
-        st.people.push(np)
-        return np
-      })
-      return json({ ok: true, person: p })
-    }
-    const pm = path.match(/^\/people\/([\w-]+)$/)
-    if (pm && m === "DELETE") {
-      await mutate((st) => {
-        st.people = st.people.filter((p) => p.id !== pm[1])
-        st.rules = st.rules.filter((r) => !(r.target?.kind === "person" && r.target.id === pm[1]))
-      })
-      const meta = await loadMeta()
-      for (const k of Object.keys(meta)) if (meta[k].owner === pm[1]) delete meta[k].owner
-      await saveMeta(meta)
-      return json({ ok: true })
-    }
-
-    if (path === "/rules" && m === "POST") {
-      const rule = await cleanRule(body, await gids())
-      await mutate((st) => {
-        const i = st.rules.findIndex((r) => r.id === rule.id)
-        if (i >= 0) st.rules[i] = rule
-        else st.rules.push(rule)
-      })
-      return json({ ok: true, rule })
-    }
-    const rm = path.match(/^\/rules\/([\w-]+)(\/toggle)?$/)
-    if (rm) {
-      await mutate((st) => {
-        const r = st.rules.find((x) => x.id === rm[1])
-        if (!r) throw new Http(404, "Không tìm thấy lịch")
-        if (m === "DELETE") st.rules = st.rules.filter((x) => x.id !== rm[1])
-        else if (rm[2] && m === "POST") r.enabled = !r.enabled
-        else throw new Http(405, "Không hỗ trợ")
-      })
       return json({ ok: true })
     }
 
