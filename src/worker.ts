@@ -22,7 +22,7 @@ export default {
     const res = await env.ASSETS.fetch(request)
     const h = new Headers(res.headers)
     h.set("Content-Security-Policy", "frame-ancestors 'self' https://nha-minh.giadinhxuan.workers.dev")
-    if (url.pathname === "/app.js" || url.pathname === "/app.css" || url.pathname === "/sw.js") {
+    if (["/app.js", "/app.css", "/parent.js", "/parent.css", "/sw.js"].includes(url.pathname)) {
       h.set("Cache-Control", "no-cache, must-revalidate")
     }
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h })

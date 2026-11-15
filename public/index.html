@@ -19,11 +19,13 @@
 (()=>{try{const q=new URLSearchParams(location.search).get("theme");const t=(q==="light"||q==="dark")?q:(localStorage.getItem("nm_theme")||(matchMedia("(prefers-color-scheme:dark)").matches?"dark":"light"));document.documentElement.dataset.theme=t;if(window.parent!==window)document.documentElement.classList.add("embed");document.documentElement.style.colorScheme=t;localStorage.setItem("nm_theme",t)}catch(e){}})();
 </script>
 <link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/parent.css">
 </head>
 <body>
 <div id="root"></div>
 <div class="scrim" id="scrim" aria-hidden="true"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="/app.js"></script>
+<script src="/parent.js"></script>
 </body>
 </html>
