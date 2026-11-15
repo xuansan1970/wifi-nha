@@ -1,5 +1,5 @@
 /* WiFi Nhà · màn hình Điều khiển cho Ba Mẹ (tối giản, nút to).
-   Dùng chung hàm của app.js: S, api, act, render, sheet, closeSheet, confirmBox, toast, I, esc, hmVN, dayWord, left, quickWifiCard, netRulesCard.
+   Dùng chung hàm của app.js: S, api, act, render, sheet, closeSheet, confirmBox, toast, I, esc, hmVN, dayWord, left, quickWifiCard.
    Mọi nút đọc trạng thái từ S.d.net (server tính theo router thật) → bấm xong luôn vẽ lại từ dữ liệu server trả về. */
 
 const SCENE_UI = {
@@ -58,7 +58,7 @@ function grantCard() {
 
 function vParentHome() {
   return header(`Chào ${esc(S.me.name)}`) + sceneHero() + `<div class="pz-grid">${sceneKeys()}${timerCard()}</div>`
-    + grantCard() + quickWifiCard() + limitsCard() + netRulesCard();
+    + grantCard() + quickWifiCard() + limitsCard();
 }
 
 async function runScene(k, btn) {
@@ -118,17 +118,30 @@ function dayBar(wins) {
   const nowP = p(vnNow().hm);
   return `<div class="lim-bar" aria-hidden="true">${wins.map(([a, b]) => `<i style="left:${p(a)}%;width:${p(b) - p(a)}%"></i>`).join("")}<b style="left:${nowP}%"></b></div><div class="lim-ax"><span>0h</span><span>6h</span><span>12h</span><span>18h</span><span>24h</span></div>`;
 }
+// Khung giờ được dùng của 1 lịch "tắt cả nhà" (phần bù của khung tắt) — để vẽ chung kiểu thanh 24 giờ
+const ruleWins = (r) => (r.offAt < r.onAt ? [["00:00", r.offAt], [r.onAt, "24:00"]] : [[r.onAt, r.offAt]]).filter(([a, b]) => a < b);
+function familyRows() {
+  const R = S.d?.net?.rules || [];
+  return R.map((r) => `<div class="row lim-row" style="cursor:default;opacity:${r.enabled ? 1 : .55}"><div style="min-width:0">
+      <div class="nm" style="white-space:normal">Tắt ${esc(r.offAt)} → mở ${esc(r.onAt)}</div>
+      <div class="meta">${esc(r.name)} · ${dayTxt(r.days)}${r.mode === "ghost" ? " · <b>giả lỗi (tắt + ẩn)</b>" : ""}</div>${r.enabled ? dayBar(ruleWins(r)) : ""}</div>
+    <div class="rr" style="flex-direction:column;align-items:flex-end;gap:6px"><button class="sw ${r.enabled ? "on" : ""}" role="switch" aria-checked="${r.enabled}" aria-label="Bật/tắt lịch" data-nrt="${r.id}"></button>
+      <div style="display:flex"><button class="btn ghost sm icon" data-nre="${r.id}" aria-label="Sửa">${I.edit}</button><button class="btn ghost sm icon" data-nrd="${r.id}" aria-label="Xoá">${I.trash}</button></div></div></div>`).join("");
+}
 function limitsCard() {
   const G = typeof wifiGroups === "function" ? wifiGroups().filter((g) => !g.private) : [];
-  if (!G.length) return "";
-  return `<div class="card" style="margin-bottom:16px"><div class="card-h"><span style="color:var(--pri)">${I.clock}</span><h2>Giờ dùng WiFi</h2></div>
-  <p class="meta" style="margin:-6px 0 12px">Ngoài giờ được dùng, WiFi tự tắt; tới giờ tự bật lại. Chỉnh ngay tại đây, không cần vào eWeb.</p>
+  const fam = familyRows();
+  return `<div class="card" style="margin-bottom:16px"><div class="card-h"><span style="color:var(--pri)">${I.clock}</span><h2>Lịch dùng WiFi</h2></div>
+  <p class="meta" style="margin:-6px 0 12px">Phần <b style="color:var(--ok)">xanh</b> là giờ được dùng, ngoài giờ WiFi tự tắt, tới giờ tự bật lại. Lịch cả nhà được ưu tiên hơn lịch từng WiFi.</p>
+  <div class="lbl" style="display:flex;align-items:center;gap:8px;margin-bottom:4px">Cả nhà (mọi WiFi)<span class="grow" style="flex:1"></span><button class="btn sm" id="nradd">${I.plus}<span>Thêm giờ tắt</span></button></div>
+  ${fam ? `<div class="list">${fam}</div>` : `<div class="meta" style="margin:4px 0 8px">Chưa có. Ví dụ: tắt cả nhà 22:00 → mở 6:00 mỗi ngày.</div>`}
+  ${G.length ? `<div class="lbl" style="margin-top:16px">Từng WiFi</div>
   <div class="list">${G.map((g) => { const l = limAny(g.name), st = limitState(g.name);
     const chip = !l || !l.enabled ? `<span class="chip">Tự do</span>` : st.ok ? `<span class="chip ok">Trong giờ</span>` : `<span class="chip warn">Ngoài giờ</span>`;
     const nxt = l?.enabled && st?.next ? ` · ${st.ok ? "tắt" : "mở"} ${hmVN(st.next)}${dayWord(st.next) === "hôm nay" ? "" : " " + dayWord(st.next)}` : "";
     return `<button class="row lim-row" data-lim="${esc(g.name)}"><div style="min-width:0;flex:1"><div class="nm"><span class="ell">${esc(g.name)}</span></div>
-      ${l ? `<div class="meta">${esc(winTxt(l))} · ${dayTxt(l.days)}${nxt}</div>${l.enabled ? dayBar(l.wins) : ""}` : `<div class="meta">Chưa đặt giờ · bấm để đặt</div>`}</div>
-      <div class="rr" style="flex-direction:column;align-items:flex-end;gap:6px">${chip}<span class="meta" style="font-weight:600">${l ? "Sửa" : "Đặt giờ"} ${I.chev}</span></div></button>`; }).join("")}</div></div>`;
+      ${l ? `<div class="meta">${esc(winTxt(l))} · ${dayTxt(l.days)}${nxt}</div>${l.enabled ? dayBar(l.wins) : ""}` : `<div class="meta">Dùng cả ngày · bấm để đặt giờ</div>`}</div>
+      <div class="rr" style="flex-direction:column;align-items:flex-end;gap:6px">${chip}<span class="meta" style="font-weight:600">${l ? "Sửa" : "Đặt giờ"} ${I.chev}</span></div></button>`; }).join("")}</div>` : ""}</div>`;
 }
 function limitSheet(name) {
   const cur = limAny(name);

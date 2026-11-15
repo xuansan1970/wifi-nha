@@ -754,18 +754,11 @@ function netHero() {
     <div class="net-note meta">${outHours ? `<b style="color:var(--warn)">Đang ngoài giờ phát của router</b> — "Cho dùng thêm" chưa mở được WiFi lúc này; muốn dùng ngoài giờ phải sửa time limit trong eWeb. ` : ""}Camera, thiết bị nhà thông minh không bị ảnh hưởng.</div>
   </section>`;
 }
-function netRulesCard() {
-  const R = S.d.net?.rules || [];
-  return `<div class="card" style="margin-bottom:16px"><div class="card-h"><h2>Hẹn giờ tắt mạng</h2><div class="grow"></div><button class="btn sm pri" id="nradd">${I.plus}<span>Thêm</span></button></div>
-  ${R.length ? `<div class="list">${R.map((r) => `<div class="row" style="cursor:default;grid-template-columns:auto minmax(0,1fr) auto;opacity:${r.enabled ? 1 : .55}"><span class="av soft">${I.clock}</span><div style="min-width:0"><div class="nm num" style="font-size:17px">Tắt ${esc(r.offAt)} → mở ${esc(r.onAt)}</div><div class="meta" style="margin:2px 0 6px">${esc(r.name)}${r.mode === "ghost" ? ' · <b>giả lỗi (tắt + ẩn)</b>' : ""}</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="${r.days.includes(d) ? "on" : ""}">${DAYS[d]}</span>`).join("")}</div></div>
-    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><button class="sw ${r.enabled ? "on" : ""}" role="switch" aria-checked="${r.enabled}" aria-label="Bật/tắt lịch" data-nrt="${r.id}"></button><div style="display:flex"><button class="btn ghost sm icon" data-nre="${r.id}" aria-label="Sửa">${I.edit}</button><button class="btn ghost sm icon" data-nrd="${r.id}" aria-label="Xoá">${I.trash}</button></div></div></div>`).join("")}</div>`
-    : `<div class="empty"><b>Chưa có lịch</b>Ví dụ: tắt mạng 22:00 → mở 6:00 mỗi ngày.</div>`}</div>`;
-}
 function netRuleSheet(init) {
   const f = Object.assign({ name: "", days: [0, 1, 2, 3, 4, 5, 6], offAt: "22:00", onAt: "06:00", enabled: true, mode: "off" }, JSON.parse(JSON.stringify(init || {})));
   const PRE = [["Giờ ngủ", "22:00", "06:00", [0, 1, 2, 3, 4, 5, 6]], ["Giờ học tối", "19:00", "21:00", [1, 2, 3, 4, 5]], ["Nghỉ trưa", "12:00", "13:30", [0, 1, 2, 3, 4, 5, 6]]];
   const draw = () => {
-    sheet(`<div class="grab"></div><div class="sheet-h"><div class="t"><h3>${f.id ? "Sửa lịch" : "Hẹn giờ tắt mạng"}</h3><p>Đến giờ tắt, mọi WiFi gia đình tự tắt; đến giờ mở tự bật lại.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
+    sheet(`<div class="grab"></div><div class="sheet-h"><div class="t"><h3>${f.id ? "Sửa giờ tắt cả nhà" : "Giờ tắt cả nhà"}</h3><p>Đến giờ tắt, mọi WiFi gia đình tự tắt; đến giờ mở tự bật lại.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
       ${f.id ? "" : `<div class="field"><label class="lbl">Chọn nhanh</label><div class="opts" id="pre">${PRE.map(([n, a, b], i) => `<button class="opt" data-p="${i}">${n} ${a}–${b}</button>`).join("")}</div></div>`}
       <div class="field two"><div><label class="lbl">Tắt mạng lúc</label><input class="inp" type="time" id="t1" value="${f.offAt}"></div><div><label class="lbl">Mở lại lúc</label><input class="inp" type="time" id="t2" value="${f.onAt}"></div></div>
       <div class="hint" style="margin:-6px 0 12px">Giờ mở nhỏ hơn giờ tắt = mở vào sáng hôm sau.</div>
