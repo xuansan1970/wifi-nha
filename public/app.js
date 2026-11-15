@@ -750,6 +750,8 @@ function parentBlockSheet(mac, name) {
   $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
   bindBlockOpts({ kind: "device", id: mac }, name);
 }
+/* ---------- Sheet chung ---------- */
+let lastFocus = null;
 function sheet(html) { lastFocus = document.activeElement; $("#sheet").innerHTML = html; $("#sheet").scrollTop = 0; const s = $("#scrim"); s.classList.add("show"); s.setAttribute("aria-hidden", "false"); }
 function closeSheet() { const s = $("#scrim"); s.classList.remove("show"); s.setAttribute("aria-hidden", "true"); lastFocus?.focus?.(); }
 $("#scrim").addEventListener("click", (e) => { if (e.target.id === "scrim") closeSheet(); });
