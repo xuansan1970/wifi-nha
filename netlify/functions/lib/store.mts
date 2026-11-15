@@ -47,7 +47,32 @@ export const store = () => {
   return getStore({ name: "wifi-admin", consistency: "strong" })
 }
 
+// ---- Nơi lưu chính: Durable Object (1 bản duy nhất cho mọi thiết bị, gói Free 100.000 lần ghi/ngày) ----
+// Trước 16/11/2026 dữ liệu nằm ở KV (gói Free chỉ 1.000 lần ghi/ngày, hết thì lưu tạm từng data center → mỗi máy thấy 1 kiểu).
+// Lần đầu đọc 1 key chưa có trong Durable Object: lấy bản mới nhất từ KV/bản tạm rồi chép sang.
+const DO = () => (globalThis as any).__CF_DO as { get(k: string): Promise<any>; put(k: string, v: any): Promise<void> } | undefined
+async function legacyGet<T>(key: string): Promise<T | null> {
+  const kv = (globalThis as any).__CF_KV
+  if (!kv) return null
+  if (!isSoft(key)) {
+    const t = await cacheGet<T>(FB(key))
+    if (t !== null) return t
+  }
+  return ((await kv.get(key, "json")) as T) ?? null
+}
+
 export async function getJSON<T>(key: string, fb: T): Promise<T> {
+  const d = DO()
+  if (d) {
+    const v = await d.get(key)
+    if (v !== undefined && v !== null) return v as T
+    const old = await legacyGet<T>(key).catch(() => null)
+    if (old !== null) {
+      await d.put(key, old)
+      return old
+    }
+    return fb
+  }
   const kv = (globalThis as any).__CF_KV
   if (kv) {
     if (!isSoft(key)) {
@@ -60,6 +85,8 @@ export async function getJSON<T>(key: string, fb: T): Promise<T> {
 }
 
 export async function setJSON(key: string, v: any) {
+  const d = DO()
+  if (d) return d.put(key, v)
   const kv = (globalThis as any).__CF_KV
   if (kv) {
     await safeKvPut(kv, key, JSON.stringify(v))

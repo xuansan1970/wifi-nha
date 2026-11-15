@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers"
 import apiHandler from "../netlify/functions/api.mts"
 import tickHandler from "../netlify/functions/tick.mts"
 
@@ -7,7 +8,18 @@ export interface Env {
   [key: string]: any
 }
 
+// Nơi lưu dữ liệu chính (1 bản cho mọi thiết bị) — xem lib/store.mts
+export class StoreDO extends DurableObject {
+  async get(key: string) {
+    return this.ctx.storage.get(key)
+  }
+  async put(key: string, value: any) {
+    await this.ctx.storage.put(key, value)
+  }
+}
+
 function initEnv(env: Env) {
+  ;(globalThis as any).__CF_DO = env.STORE.get(env.STORE.idFromName("main"))
   ;(globalThis as any).__CF_KV = env.KV
   ;(globalThis as any).__CF_ENV = env
 }

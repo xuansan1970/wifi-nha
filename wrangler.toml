@@ -14,3 +14,12 @@ crons = ["*/5 * * * *"]
 [[kv_namespaces]]
 binding = "KV"
 id = "872ca36b7a544ddda82d53cda297523b"
+
+# Nơi lưu dữ liệu chính (thay KV: KV gói Free chỉ 1.000 lần ghi/ngày)
+[[durable_objects.bindings]]
+name = "STORE"
+class_name = "StoreDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["StoreDO"]
