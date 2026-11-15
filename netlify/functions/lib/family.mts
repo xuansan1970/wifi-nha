@@ -56,13 +56,20 @@ export function isFamilySsid(gid: number, s: { id: number; name?: string; hidden
 // Trạng thái thật trên router (để nút bấm luôn khớp thực tế, kể cả khi bật/tắt lẻ từng WiFi)
 export function liveOf(snap: any, f: Family) {
   const g = ghostSet(f)
-  let on = 0, total = 0
-  for (const r of snap?.routers ?? []) for (const s of r.ssids ?? []) if (isFamilySsid(r.gid, s, g)) { total++; if (s.enable) on++ }
-  return { on, total }
+  let on = 0, total = 0, rest = 0 // rest: WiFi tắt vì đang ngoài "giờ dùng"
+  const now = Date.now()
+  for (const r of snap?.routers ?? [])
+    for (const s of r.ssids ?? [])
+      if (isFamilySsid(r.gid, s, g)) {
+        total++
+        if (s.enable) on++
+        else if (!inLimit(f, s.name, now)) rest++
+      }
+  return { on, total, rest }
 }
-export function sceneOf(f: Family, live: { on: number; total: number }): Scene {
-  // Đang mở theo chế độ thường nhưng mọi WiFi đều ngoài "giờ dùng" → vẫn tính là mở (tới giờ tự bật lại)
-  const on = live.total ? live.on > 0 || (f.on && !f.ghost.length && f.limits.some((l) => l.enabled)) : f.on
+export function sceneOf(f: Family, live: { on: number; total: number; rest?: number }): Scene {
+  // Mọi WiFi tắt đều do ngoài "giờ dùng" (không phải tắt tay) → vẫn tính là mở, tới giờ tự bật lại
+  const on = live.total ? live.on > 0 || (f.on && !f.ghost.length && !!live.rest && live.rest === live.total) : f.on
   return on ? "on" : f.ghost.length ? "ghost" : "off"
 }
 
