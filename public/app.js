@@ -280,7 +280,7 @@ function vHome() {
   const R = S.d.routers, cl = clients();
   const on = R.filter((r) => r.online).length;
   const err = S.d.errors?.length ? `<div class="alert bad">${I.alert}<div><b>Một số dữ liệu chưa tải được</b><br>${esc(S.d.errors[0])}</div></div>` : "";
-  return header("Tổng quan") + err + netHero() + quickWifiCard() + limitsCard() + `
+  return header("Tổng quan") + err + netHero() + `<div class="pz-grid">${sceneKeys()}${timerCard()}</div>` + quickWifiCard() + limitsCard() + `
   <div class="grid g4" style="margin-bottom:16px">
     ${kpi(I.router, "Router online", `${on}/${R.length}`, on === R.length ? "Tất cả hoạt động" : "Có router mất kết nối", on === R.length ? "var(--ok)" : "var(--bad)")}
     ${kpi(I.devices, "Thiết bị online", cl.length, `${cl.filter((c) => c.kind !== "iot" && c.kind !== "camera").length} máy dùng · ${cl.filter((c) => c.kind === "iot" || c.kind === "camera").length} IoT`, "var(--pri)")}
@@ -561,7 +561,7 @@ function ruleDesc(r) {
 function vRules() {
   const R = S.d.rules;
   return header("Hẹn giờ", `<button class="btn pri" id="radd">${I.plus}<span>Thêm lịch</span></button>`) + `<div class="alert" style="background:var(--pri-soft);color:var(--text2)">${I.clock}<div>Lịch chạy trên máy chủ mỗi phút theo giờ Việt Nam — vẫn chạy khi điện thoại, MacBook tắt.</div></div>
-  ${routerSchedCard()}${R.length ? `<div class="grid g2 fade-list">${R.map((r) => { const [l, ic, c] = RT[r.type]; return `<div class="card" style="opacity:${r.enabled ? 1 : .55};display:flex;gap:14px;align-items:flex-start"><span class="floor-ic" style="background:${c}">${I[ic]}</span><div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:700;letter-spacing:-.02em" class="num">${esc(ruleTime(r))}</div><div class="meta" style="margin:2px 0 8px">${esc(r.name)} · ${esc(ruleDesc(r))}</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="${r.days.includes(d) ? "on" : ""}">${DAYS[d]}</span>`).join("")}</div></div>
+  ${limitsCard()}${routerSchedCard()}${R.length ? `<div class="grid g2 fade-list">${R.map((r) => { const [l, ic, c] = RT[r.type]; return `<div class="card" style="opacity:${r.enabled ? 1 : .55};display:flex;gap:14px;align-items:flex-start"><span class="floor-ic" style="background:${c}">${I[ic]}</span><div style="flex:1;min-width:0"><div style="font-size:20px;font-weight:700;letter-spacing:-.02em" class="num">${esc(ruleTime(r))}</div><div class="meta" style="margin:2px 0 8px">${esc(r.name)} · ${esc(ruleDesc(r))}</div><div class="days">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<span class="${r.days.includes(d) ? "on" : ""}">${DAYS[d]}</span>`).join("")}</div></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px"><button class="sw ${r.enabled ? "on" : ""}" role="switch" aria-checked="${r.enabled}" data-rt="${r.id}"></button><div style="display:flex"><button class="btn ghost sm icon" data-re="${r.id}" aria-label="Sửa">${I.edit}</button><button class="btn ghost sm icon" data-rd="${r.id}" aria-label="Xoá">${I.trash}</button></div></div></div>`; }).join("")}</div>`
     : `<div class="empty"><b>Chưa có lịch nào</b>Ví dụ: tắt WiFi phòng các em 23:00 → 6:00, khoá mạng giờ học, giới hạn 2 giờ chơi mỗi ngày, khởi động lại router 4:00 sáng.</div>`}`;
 }
