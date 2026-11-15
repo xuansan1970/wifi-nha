@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions"
 import {
-  cleanRule as cleanNetRule, cleanTimer, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
+  cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
 } from "./lib/family.mts"
 import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
@@ -230,7 +230,7 @@ export default async (req: Request) => {
 
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/cam/config", "/cam/log", "/device", "/people", "/rules"].includes(path) && !/^\/(net\/rules|net\/timer|people|rules)\//.test(path))
+    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/cam/config", "/cam/log", "/device", "/people", "/rules"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -392,6 +392,35 @@ export default async (req: Request) => {
       const id = path.slice("/net/timer/".length)
       await saveTimers((ts) => ts.filter((x) => x.id !== id))
       await L([{ t: Date.now(), ok: true, by: s.name, text: "Huỷ một hẹn giờ mạng" }])
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path === "/net/limits" && m === "POST") {
+      let l
+      try {
+        l = cleanLimit(body)
+      } catch (e: any) {
+        throw new Http(400, e.message)
+      }
+      // Chỉ đặt giờ cho WiFi gia đình (không phải WiFi riêng / IoT)
+      const snap = await getSnapshot(10 * 60_000)
+      const g = ghostSet(await loadFamily())
+      const known = snap.routers.some((r: any) => r.ssids.some((x: any) => x.name === l.ssid && isFamilySsid(r.gid, x, g)))
+      if (!known) throw new Http(403, "WiFi này không đặt giờ được")
+      await saveLimits((ls) => [...ls.filter((x) => x.id !== l.id && x.ssid !== l.ssid), l])
+      const DV = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Đặt giờ dùng WiFi “${l.ssid}”: ${l.wins.map((w) => w.join("–")).join(", ")} · ${l.days.length === 7 ? "mỗi ngày" : l.days.map((d) => DV[d]).join(" ")}${l.enabled ? "" : " (đang tắt giới hạn)"}` }])
+      // áp dụng ngay nếu mạng đang mở bình thường
+      // Áp dụng ngay: WiFi đang ngoài giờ dùng thì tắt (không bật/tắt WiFi khác)
+      const now = Date.now()
+      const logs = await tickLimits(await loadFamily(), now, now - 1, now).catch((e: any) => [{ t: now, ok: false, by: "Giờ dùng WiFi", text: `Lỗi áp giờ dùng: ${e.message}` }])
+      if (logs.length) await addLog(logs.map((x) => ({ ...x, role: "system" as const })))
+      return json({ ok: true, net: await familyView() })
+    }
+    if (path.startsWith("/net/limits/") && m === "DELETE") {
+      const id = path.slice("/net/limits/".length)
+      const old = (await loadFamily()).limits.find((x) => x.id === id)
+      await saveLimits((ls) => ls.filter((x) => x.id !== id))
+      if (old) await L([{ t: Date.now(), ok: true, by: s.name, text: `Bỏ giờ dùng WiFi “${old.ssid}” (dùng tự do)` }])
       return json({ ok: true, net: await familyView() })
     }
     if (path === "/net/rules" && m === "POST") {

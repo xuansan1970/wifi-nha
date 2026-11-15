@@ -13,6 +13,8 @@ export const SCENE_VI: Record<Scene, string> = { on: "Mở toàn bộ mạng", o
 export type NetRule = { id: string; name: string; days: number[]; offAt: string; onAt: string; enabled: boolean; mode: "off" | "ghost" }
 export type Grant = { until: number; minutes: number; by: string; prev: Scene }
 export type Timer = { id: string; at: number; scene: Scene; by: string }
+// Giờ dùng WiFi (thay "time limit" của eWeb): WiFi chỉ phát trong các khung giờ, các ngày đã chọn; ngày khác dùng tự do
+export type Limit = { id: string; ssid: string; enabled: boolean; days: number[]; wins: [string, string][] }
 type Ref = { gid: number; ssidIds: number[] }
 export type Family = {
   on: boolean // trạng thái mong muốn gần nhất (dự phòng khi chưa có dữ liệu router)
@@ -20,6 +22,7 @@ export type Family = {
   grant?: Grant | null
   rules: NetRule[]
   timers: Timer[]
+  limits: Limit[]
   changedAt?: number
   changedBy?: string
 }
@@ -34,6 +37,7 @@ export const loadFamily = async (): Promise<Family> => {
     grant: f.grant ? { ...f.grant, prev: asScene(f.grant.prev, "on") } : null,
     rules: (f.rules ?? []).map((r: any) => ({ ...r, mode: r.mode === "ghost" ? "ghost" : "off" })),
     timers: f.timers ?? [],
+    limits: f.limits ?? [],
     changedAt: f.changedAt,
     changedBy: f.changedBy,
   }
@@ -57,7 +61,8 @@ export function liveOf(snap: any, f: Family) {
   return { on, total }
 }
 export function sceneOf(f: Family, live: { on: number; total: number }): Scene {
-  const on = live.total ? live.on > 0 : f.on
+  // Đang mở theo chế độ thường nhưng mọi WiFi đều ngoài "giờ dùng" → vẫn tính là mở (tới giờ tự bật lại)
+  const on = live.total ? live.on > 0 || (f.on && !f.ghost.length && f.limits.some((l) => l.enabled)) : f.on
   return on ? "on" : f.ghost.length ? "ghost" : "off"
 }
 
@@ -107,6 +112,34 @@ export function nextChange(rules: NetRule[], now = Date.now()) {
   return null
 }
 
+// ---- Giờ dùng WiFi ----
+const HM_END = /^(([01]\d|2[0-3]):[0-5]\d|24:00)$/
+export function cleanLimit(b: any): Limit {
+  const ssid = String(b.ssid || "").trim().slice(0, 40)
+  if (!ssid) throw new Error("Chưa chọn WiFi")
+  const days = [...new Set((Array.isArray(b.days) ? b.days : []).map(Number).filter((d: number) => d >= 0 && d <= 6))] as number[]
+  if (!days.length) throw new Error("Chọn ít nhất 1 ngày")
+  const wins = (Array.isArray(b.wins) ? b.wins : [])
+    .map((w: any) => [String(w?.[0] || ""), String(w?.[1] || "")] as [string, string])
+    .filter(([a, c]: [string, string]) => a || c)
+  if (!wins.length) throw new Error("Thêm ít nhất 1 khung giờ được dùng")
+  for (const [a, c] of wins) {
+    if (!HM.test(a) || !HM_END.test(c)) throw new Error("Giờ không hợp lệ")
+    if (a >= c) throw new Error(`Khung ${a}–${c}: giờ kết thúc phải sau giờ bắt đầu (trong cùng ngày)`)
+  }
+  wins.sort((x: [string, string], y: [string, string]) => (x[0] < y[0] ? -1 : 1))
+  return { id: String(b.id || "").slice(0, 40) || Math.random().toString(36).slice(2, 10), ssid, enabled: b.enabled !== false, days: days.sort(), wins: wins.slice(0, 6) }
+}
+const limitOf = (f: Family, name: string) => f.limits.find((l) => l.enabled && l.ssid.toLowerCase() === String(name || "").trim().toLowerCase())
+// WiFi `name` có đang trong giờ được dùng không (không đặt giờ / ngày không áp dụng = được dùng)
+export function inLimit(f: Family, name: string, ms: number) {
+  const l = limitOf(f, name)
+  if (!l) return true
+  const { hm, dow } = vn(ms)
+  if (!l.days.includes(dow)) return true
+  return l.wins.some(([a, c]) => hm >= a && hm < c)
+}
+
 // ---- Áp dụng lên router ----
 const byGid = (refs: Ref[]) => {
   const m = new Map<number, number[]>()
@@ -134,14 +167,18 @@ async function setHidden(refs: Ref[], hidden: boolean) {
   return { ok, failed }
 }
 
-async function apply(f: Family, scene: Scene) {
+async function apply(f: Family, scene: Scene, ignoreLimits = false) {
   const snap = await getSnapshot(5 * 60_000)
   const g = ghostSet(f)
-  const fam: Ref[] = snap.routers
-    .map((r: any) => ({ gid: r.gid, ssidIds: r.ssids.filter((x: any) => isFamilySsid(r.gid, x, g)).map((x: any) => x.id) }))
-    .filter((t: Ref) => t.ssidIds.length)
-  if (!fam.length) throw new Error("không thấy WiFi gia đình nào trên router")
   const enable = scene === "on"
+  const now = Date.now()
+  const pick = (want: boolean) => snap.routers
+    .map((r: any) => ({ gid: r.gid, ssidIds: r.ssids.filter((x: any) => isFamilySsid(r.gid, x, g) && (!enable || ignoreLimits || inLimit(f, x.name, now) === want)).map((x: any) => x.id) }))
+    .filter((t: Ref) => t.ssidIds.length)
+  const fam: Ref[] = pick(true)
+  // Mở mạng theo chế độ thường: WiFi đang ngoài "giờ dùng" thì giữ tắt
+  const outRefs: Ref[] = enable && !ignoreLimits ? pick(false) : []
+  if (!fam.length && !outRefs.length) throw new Error("không thấy WiFi gia đình nào trên router")
   let failed = 0
   let unhidden: Ref[] = []
   let hiddenNow: Ref[] = []
@@ -155,7 +192,10 @@ async function apply(f: Family, scene: Scene) {
   const res = await Promise.allSettled(fam.map((t) => R.setSsids(t.gid, t.ssidIds, enable)))
   const okRefs = fam.filter((_, i) => res[i].status === "fulfilled")
   failed += res.length - okRefs.length
-  if (!okRefs.length) throw new Error("router không nhận lệnh, thử lại sau")
+  const res2 = await Promise.allSettled(outRefs.map((t) => R.setSsids(t.gid, t.ssidIds, false)))
+  const okOut = outRefs.filter((_, i) => res2[i].status === "fulfilled")
+  failed += res2.length - okOut.length
+  if (!okRefs.length && !okOut.length) throw new Error("router không nhận lệnh, thử lại sau")
   // Tắt thường (không giả lỗi): tắt phát xong thì hiện lại tên WiFi đã ẩn
   if (scene === "off" && f.ghost.length) {
     const r = await setHidden(f.ghost, false)
@@ -180,11 +220,12 @@ async function apply(f: Family, scene: Scene) {
         if (r.gid === t.gid)
           for (const x of r.ssids) {
             if (t.ssidIds.includes(x.id)) x.enable = enable
+            if (okOut.some((o) => o.gid === r.gid && o.ssidIds.includes(x.id))) x.enable = false
             if (un.has(gk(r.gid, x.id))) x.hidden = false
             if (hid.has(gk(r.gid, x.id))) x.hidden = true
           }
   })
-  return { n: okRefs.reduce((a, t) => a + t.ssidIds.length, 0), failed }
+  return { n: okRefs.reduce((a, t) => a + t.ssidIds.length, 0), out: okOut.reduce((a, t) => a + t.ssidIds.length, 0), failed }
 }
 
 const hhmm = (ms: number) => vn(ms).hm
@@ -200,7 +241,7 @@ export async function setScene(scene: Scene, by: string): Promise<LogItem> {
     f.changedAt = t
     f.changedBy = by
     await saveFamily(f)
-    return { t, ok: true, by, text: `${SCENE_VI[scene]} (${r.n} WiFi)${r.failed ? ` · ${r.failed} thao tác lỗi` : ""}` }
+    return { t, ok: true, by, text: `${SCENE_VI[scene]} (${r.n} WiFi${r.out ? `, ${r.out} WiFi ngoài giờ dùng giữ tắt` : ""})${r.failed ? ` · ${r.failed} thao tác lỗi` : ""}` }
   } catch (e: any) {
     return { t, ok: false, by, text: `Lỗi ${SCENE_VI[scene].toLowerCase()}: ${e.message}` }
   }
@@ -216,9 +257,8 @@ export async function grant(minutes: number, by: string): Promise<LogItem> {
   const t = Date.now()
   const f = await loadFamily()
   try {
-    const cur = await currentScene(f)
-    const prev = f.grant ? f.grant.prev : cur
-    if (cur !== "on") await apply(f, "on")
+    const prev = f.grant ? f.grant.prev : await currentScene(f)
+    await apply(f, "on", true) // cho dùng thêm: mở cả WiFi đang ngoài giờ dùng
     f.grant = { until: t + minutes * 60000, minutes, by, prev }
     f.changedAt = t
     f.changedBy = by
@@ -241,7 +281,7 @@ export async function endGrant(by: string, reason: string): Promise<LogItem | nu
   if (!f.grant) return null
   const want = modeAt(f, t, f.grant.prev)
   try {
-    if (want !== (await currentScene(f))) await apply(f, want)
+    await apply(f, want) // về chế độ: kể cả tắt lại WiFi đang ngoài giờ dùng
     f.grant = null
     f.changedAt = t
     f.changedBy = by
@@ -250,6 +290,52 @@ export async function endGrant(by: string, reason: string): Promise<LogItem | nu
   } catch (e: any) {
     return { t, ok: false, by, text: `Lỗi kết thúc giờ dùng thêm: ${e.message}` }
   }
+}
+
+export async function saveLimits(fn: (l: Limit[]) => Limit[]) {
+  const f = await loadFamily()
+  f.limits = fn(f.limits).slice(0, 20)
+  await saveFamily(f)
+  return f.limits
+}
+
+// Mỗi lần cron: hết giờ dùng → tắt WiFi đó; tới giờ bắt đầu → bật lại (chỉ khi mạng đang mở thường, không giả lỗi / dùng thêm)
+export async function tickLimits(f: Family, from: number, to: number, now: number): Promise<LogItem[]> {
+  if (!f.limits.some((l) => l.enabled) || f.grant) return []
+  const snap = await getSnapshot(5 * 60_000)
+  if (sceneOf(f, liveOf(snap, f)) !== "on") return []
+  const g = ghostSet(f)
+  const starts = (name: string) => {
+    const l = limitOf(f, name)
+    if (!l) return false
+    for (let m = from; m <= to; m += 60000) {
+      const { hm, dow } = vn(m)
+      if (l.days.includes(dow) && l.wins.some(([a]) => a === hm)) return true
+    }
+    return false
+  }
+  const offs = new Map<number, number[]>(), ons = new Map<number, number[]>(), names = { off: new Set<string>(), on: new Set<string>() }
+  for (const r of snap.routers)
+    for (const x of r.ssids) {
+      if (!isFamilySsid(r.gid, x, g) || !limitOf(f, x.name)) continue
+      const ok = inLimit(f, x.name, now)
+      if (!ok && x.enable) (offs.set(r.gid, [...(offs.get(r.gid) ?? []), x.id]), names.off.add(x.name))
+      else if (ok && !x.enable && starts(x.name)) (ons.set(r.gid, [...(ons.get(r.gid) ?? []), x.id]), names.on.add(x.name))
+    }
+  const logs: LogItem[] = []
+  for (const [want, map, ns] of [[false, offs, names.off], [true, ons, names.on]] as const) {
+    if (!map.size) continue
+    const res = await Promise.allSettled([...map].map(([gid, ids]) => R.setSsids(gid, ids, want)))
+    await patchSnapshot((sn) => {
+      ;[...map].forEach(([gid, ids], i) => {
+        if (res[i].status !== "fulfilled") return
+        for (const r of sn.routers) if (r.gid === gid) for (const x of r.ssids) if (ids.includes(x.id)) x.enable = want
+      })
+    })
+    const bad = res.filter((x) => x.status === "rejected").length
+    logs.push({ t: now, ok: bad < res.length, by: "Giờ dùng WiFi", role: "system", text: `${want ? "Tới giờ dùng, bật" : "Hết giờ dùng, tắt"} ${[...ns].join(", ")}${bad ? ` · ${bad} router lỗi` : ""}` })
+  }
+  return logs
 }
 
 export async function saveRules(fn: (rules: NetRule[]) => NetRule[]) {
@@ -306,7 +392,7 @@ export async function tickFamily(from: number, to: number, now: number): Promise
   }
   if (f.grant) return logs
   const rules = f.rules.filter((r) => r.enabled)
-  if (!rules.length) return logs
+  if (!rules.length) return [...logs, ...(await tickLimits(f, from, to, now))]
   let cur = await currentScene(f)
   for (let m = from; m <= to; m += 60000) {
     const { hm, dow } = vn(m)
@@ -322,7 +408,7 @@ export async function tickFamily(from: number, to: number, now: number): Promise
       if (l.ok) cur = want
     }
   }
-  return logs
+  return [...logs, ...(await tickLimits(await loadFamily(), from, to, now))]
 }
 
 export async function familyView(snap?: any, now = Date.now()) {
@@ -336,6 +422,7 @@ export async function familyView(snap?: any, now = Date.now()) {
     grant: f.grant && f.grant.until > now ? f.grant : null,
     rules: f.rules,
     timers: f.timers.filter((t) => t.at > now - 10 * 60_000),
+    limits: f.limits,
     next: f.grant ? null : nextChange(f.rules, now),
     changedAt: f.changedAt ?? null,
     changedBy: f.changedBy ?? null,
