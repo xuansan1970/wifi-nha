@@ -113,7 +113,7 @@ function dur(min) { min = Math.max(0, Math.round(min)); return min >= 60 ? `${Ma
 const left = (ms) => dur((ms - Date.now()) / 60000);
 function bytes(b) { if (!b) return "0 B"; const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; while (b >= 1024 && i < 4) { b /= 1024; i++; } return b.toFixed(b < 10 && i ? 1 : 0) + " " + u[i]; }
 function sig(r) { if (r == null) return ""; const n = r >= -55 ? 4 : r >= -65 ? 3 : r >= -75 ? 2 : 1; return `<span class="sig" title="${r} dBm">${[1, 2, 3, 4].map((i) => `<i class="${i <= n ? "f" : ""}"></i>`).join("")}</span>`; }
-const fmtMac = (m) => String(m).toUpperCase().match(/.{2}/g).join(":");
+const fmtMac = (m) => (String(m || "").replace(/[^a-f0-9]/gi, "").toUpperCase().match(/.{2}/g) || []).join(":") || "—";
 const timeVN = (t) => new Date(t).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" });
 
 /* ---------- Dữ liệu suy ra ---------- */
@@ -131,13 +131,13 @@ function quotaOf(pid) { return (S.d?.rules || []).find((r) => r.type === "quota"
 /* ---------- Tải dữ liệu (nhanh trước, mới sau) ---------- */
 let inflight = null;
 async function load(mode) {
-  if (inflight && mode !== "force") return inflight;
+  if (inflight) return mode === "force" ? inflight.catch(() => {}).then(() => load("force")) : inflight;
   const path = mode === "fast" ? "/view?fast=1" : mode === "force" ? "/refresh" : "/view";
   inflight = (async () => {
     try {
       const d = await api(path, mode === "force" ? { method: "POST", timeout: 45000 } : {});
       S.d = d; S.me = d.me; S.err = null; S.at = Date.now();
-    } catch (e) { S.err = e.message; if (!S.d) throw e; }
+    } catch (e) { S.err = e.message; toHub(e.message, "warn"); if (!S.me) return; if (!S.d) throw e; }
     finally { inflight = null; }
     if (S.tab === "cameras") {
       const sub = $(".top .sub");
@@ -150,20 +150,20 @@ async function load(mode) {
     } else {
       render();
     }
-    if (S.d?.routers) { const on = S.d.routers.filter((r) => r.online).length, n = S.d.routers.length, bl = S.d.blocked?.length || 0; toHub(`${on}/${n} router online · ${S.d.routers.reduce((a, r) => a + (r.clients?.length || 0), 0)} thiết bị`, on === n ? "ok" : "warn", on < n ? `${n - on} router mất kết nối` : bl ? `${bl} thiết bị đang chặn` : ""); }
+    if (!S.err && S.d?.routers) { const on = S.d.routers.filter((r) => r.online).length, n = S.d.routers.length, bl = S.d.blocked?.length || 0; toHub(`${on}/${n} router online · ${S.d.routers.reduce((a, r) => a + (r.clients?.length || 0), 0)} thiết bị`, on === n ? "ok" : "warn", on < n ? `${n - on} router mất kết nối` : bl ? `${bl} thiết bị đang chặn` : "", S.d.at); }
   })();
   return inflight;
 }
 function startPolling() {
   clearInterval(S.poll);
-  S.poll = setInterval(() => { if (!document.hidden && S.me && !$("#scrim").classList.contains("show")) load(); }, 15000);
+  S.poll = setInterval(() => { if (!document.hidden && S.me && !$("#scrim").classList.contains("show")) load().catch(() => {}); }, 15000);
 }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { S.lastHidden = Date.now(); return; }
   if (!S.me) return;
   // Tài khoản Ba Mẹ (mọi tài khoản trừ Xuân San): rời app > 5 phút thì khoá lại, tránh các em cầm máy vào được
   if (S.me.uid !== "san" && S.lastHidden && Date.now() - S.lastHidden > 5 * 60000) { lockNow(); return; }
-  if (Date.now() - S.at > 10000) load();
+  if (Date.now() - S.at > 10000) load().catch(() => {});
 });
 async function lockNow() { destroyCamPcs(); toggleWebSiren(false); const uid = S.me?.uid; try { await api("/logout", { method: "POST" }); } catch {} S.me = null; S.d = null; renderLogin(uid); }
 
@@ -1184,7 +1184,7 @@ function bind(root) {
 async function boot() {
   shell(); render();
   try { await load("fast"); } catch (e) { toast(e.message, 1); }
-  load(); startPolling();
+  load().catch(() => {}); startPolling();
 }
 (async () => {
   try { const r = await api("/me"); S.me = r.me; boot(); } catch { if (!S.me) renderLogin(); }
@@ -1193,14 +1193,8 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 
 /* ---------- Cầu nối app tổng Nhà Mình: trạng thái + đồng bộ Sáng/Tối ---------- */
 const HUB_ORIGIN = "https://nha-minh.giadinhxuan.workers.dev";
-let hubLast = "";
-function toHub(line, tone, alert) {
-  if (window.parent === window) return;
-  const msg = { type: "nhaminh:status", line: String(line || ""), tone: tone || "idle", alert: alert || "" };
-  const k = JSON.stringify(msg);
-  if (k === hubLast) return;
-  hubLast = k;
-  try { window.parent.postMessage(msg, HUB_ORIGIN); } catch {}
+function toHub(line, tone, alert, at) {
+  window.NhaMinhBridge?.status(line, tone, alert, at);
 }
 function getTheme() { return document.documentElement.dataset.theme === "dark" ? "dark" : "light"; }
 function applyTheme(t, notifyHub = false) {
@@ -1219,8 +1213,10 @@ function applyTheme(t, notifyHub = false) {
 }
 function toggleTheme() { applyTheme(getTheme() === "dark" ? "light" : "dark", true); }
 window.addEventListener("message", (e) => {
-  if (e.origin !== HUB_ORIGIN || !e.data) return;
+  if (e.origin !== HUB_ORIGIN || e.source !== window.parent || !e.data) return;
   if (e.data.type === "nhaminh:theme" && (e.data.theme === "light" || e.data.theme === "dark")) {
     applyTheme(e.data.theme, false);
   }
 });
+
+window.NhaMinhBridge?.ready();
