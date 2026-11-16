@@ -140,6 +140,9 @@ function limitSheet(name) {
         <div id="lws">${f.wins.map(([a, b], i) => `<div class="lim-win"><input class="inp" type="time" data-wa="${i}" value="${a}" aria-label="Từ"><span>đến</span><input class="inp" type="time" data-wb="${i}" value="${b === "24:00" ? "23:59" : b}" aria-label="Đến"><button class="btn ghost icon" data-wx="${i}" aria-label="Xoá khung giờ" ${f.wins.length < 2 ? "disabled" : ""}>${I.trash}</button></div>`).join("")}</div>
         <div class="opts" style="margin-top:8px"><button class="opt" id="lwadd">${I.plus} Thêm khung giờ</button>${WIN_PRESET.map(([l, w], i) => `<button class="opt" data-wp="${i}">${l}</button>`).join("")}</div></div>
       <div class="lbl">Xem trước</div>${dayBar(f.wins.filter(([a, b]) => a < b))}
+      <div class="lbl" style="margin-top:18px">Mật khẩu WiFi</div>
+      <div class="meta" id="pwcur" style="margin-bottom:8px">Bấm “Xem” để hiện mật khẩu đang dùng.</div>
+      <div class="opts"><button class="opt" id="pwshow">${I.eye}Xem mật khẩu</button><button class="opt" id="pwchg">${I.edit}Đổi mật khẩu</button></div>
       <div class="foot">${cur ? `<button class="btn red" id="ldel">${I.trash}Bỏ giới hạn</button>` : ""}<button class="btn" data-close>Huỷ</button><button class="btn pri" id="lsave">Lưu</button></div>`);
     $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
     const sync = () => { f.enabled = $("#len").checked; f.wins = f.wins.map((_, i) => [$(`[data-wa="${i}"]`).value, (v => v === "23:59" ? "24:00" : v)($(`[data-wb="${i}"]`).value)]); };
@@ -148,6 +151,9 @@ function limitSheet(name) {
     $("#lwadd").onclick = () => { sync(); if (f.wins.length >= 6) return toast("Tối đa 6 khung giờ", 1); f.wins.push(["19:00", "21:00"]); draw(); };
     $$("[data-wp]").forEach((b) => (b.onclick = () => { sync(); f.wins = JSON.parse(JSON.stringify(WIN_PRESET[+b.dataset.wp][1])); draw(); }));
     $$("[data-wx]").forEach((b) => (b.onclick = () => { sync(); f.wins.splice(+b.dataset.wx, 1); draw(); }));
+    const items = wifiGroups().find((g) => g.name === name)?.items || [];
+    $("#pwshow").onclick = () => act($("#pwshow"), async () => { const r = await api("/wifi/secret", { body: { gid: items[0].r.gid, ssidId: items[0].s.id } }); $("#pwcur").innerHTML = `Mật khẩu đang dùng: <b style="user-select:all;font-size:16px">${esc(r.password || "(không có)")}</b>`; }).catch(() => {});
+    $("#pwchg").onclick = () => passwordSheet(name, items);
     $$("#lws input").forEach((x) => (x.onchange = () => { sync(); draw(); }));
     $("#lsave").onclick = () => { sync(); if (!f.days.length) return toast("Chọn ít nhất 1 ngày", 1); const bad = f.wins.find(([a, b]) => !(a < b)); if (bad) return toast(`Khung ${bad[0]}–${bad[1]}: giờ kết thúc phải sau giờ bắt đầu`, 1);
       act($("#lsave"), async () => { const r = await api("/net/limits", { body: f, timeout: 45000 }); S.d.net = r.net; closeSheet(); load(); render(); }, "Đã lưu giờ dùng WiFi").catch(() => {}); };
@@ -155,5 +161,23 @@ function limitSheet(name) {
       act(null, async () => { const r = await api("/net/limits/" + cur.id, { method: "DELETE" }); S.d.net = r.net; render(); load(); }, "Đã bỏ giới hạn").catch(() => {}); };
   };
   draw();
+}
+// Đổi mật khẩu 1 WiFi ở mọi tầng cùng lúc
+function passwordSheet(name, items) {
+  sheet(`<div class="grab"></div><div class="sheet-h"><span class="av soft">${I.lock}</span><div class="t"><h3>Đổi mật khẩu “${esc(name)}”</h3><p>Đổi cùng lúc ở ${items.length} tầng. Mọi máy đang dùng WiFi này phải nhập lại mật khẩu mới.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
+    <div class="field"><label class="lbl">Mật khẩu mới (ít nhất 8 ký tự)</label><input class="inp" id="npw" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="63" style="font-size:18px"></div>
+    <div class="field"><label class="lbl">Nhập lại</label><input class="inp" id="npw2" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="63" style="font-size:18px"></div>
+    <div class="foot"><button class="btn" data-close>Huỷ</button><button class="btn pri" id="npws">Đổi mật khẩu</button></div>`);
+  $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = () => limitSheet(name)));
+  $("#npws").onclick = async () => {
+    const a = $("#npw").value, b = $("#npw2").value;
+    if (a.length < 8) return toast("Mật khẩu phải có ít nhất 8 ký tự", 1);
+    if (a !== b) return toast("Hai lần nhập không khớp", 1);
+    if (!(await confirmBox(`Đổi mật khẩu “${esc(name)}”?`, `Mật khẩu mới: <b>${esc(a)}</b><br><br>Điện thoại, TV, máy tính đang dùng WiFi này sẽ rớt mạng và phải nhập lại mật khẩu mới. Camera và thiết bị thông minh không bị ảnh hưởng.`, "Đổi mật khẩu", true))) return limitSheet(name);
+    const res = await Promise.allSettled(items.map((x) => api("/wifi/password", { body: { gid: x.r.gid, ssidId: x.s.id, password: a, name }, timeout: 30000 })));
+    const bad = res.filter((r) => r.status === "rejected");
+    if (bad.length) toast(`${bad.length}/${items.length} tầng chưa đổi được: ${bad[0].reason?.message || ""}`, 1);
+    else { toast(`Đã đổi mật khẩu ${name} · router áp dụng sau ~30 giây`); closeSheet(); }
+  };
 }
 function bindLimits(root) { $$("[data-lim]", root).forEach((b) => (b.onclick = () => limitSheet(b.dataset.lim))); }

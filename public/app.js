@@ -236,9 +236,11 @@ function shell() {
 }
 function go(t) {
   if (t === "more") return moreSheet();
-  if (t === "family") S.devTab = "people";
-  if (t === "devices" && S.tab !== "devices" && t !== "family") S.devTab = S.devTab || "dev";
-  t = TAB_ALIAS[t] || t;
+  // Gộp tab chỉ áp dụng cho Xuân San; Ba Mẹ vẫn có tab "Các con" riêng
+  if (isAdmin()) {
+    if (t === "family") S.devTab = "people";
+    t = TAB_ALIAS[t] || t;
+  }
   if (S.tab === "cameras" && t !== "cameras") destroyCamPcs();
   S.tab = t; shell(); render(); scrollTo({ top: 0 });
   if (t === "log") loadLog();

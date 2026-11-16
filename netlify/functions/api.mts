@@ -230,7 +230,7 @@ export default async (req: Request) => {
 
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/cam/config", "/cam/log", "/device", "/people", "/rules"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
+    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -538,6 +538,27 @@ export default async (req: Request) => {
       return json({ ok: true })
     }
 
+    // ---- Mật khẩu WiFi: Ba Mẹ chỉ xem/đổi được WiFi gia đình (không phải WiFi riêng của Xuân San, không phải IoT) ----
+    if ((path === "/wifi/secret" || path === "/wifi/password") && m === "POST") {
+      const gid = Number(body.gid), ssidId = Number(body.ssidId)
+      if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      if (parent) {
+        const snap = await getSnapshot(10 * 60_000)
+        const ss = snap.routers.find((r: any) => r.gid === gid)?.ssids.find((x: any) => x.id === ssidId)
+        if (!ss || !isFamilySsid(gid, ss, ghostSet(await loadFamily()))) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
+      }
+      if (path === "/wifi/secret") {
+        const { raw } = await R.ssidRaw(gid, ssidId)
+        await L([{ t: Date.now(), ok: true, by: s.name, text: `Xem mật khẩu WiFi “${raw.ssidName}”` }])
+        return json({ password: raw.password ?? "" })
+      }
+      const pw = String(body.password || "")
+      if (pw.length < 8 || pw.length > 63) throw new Http(400, "Mật khẩu WiFi 8–63 ký tự")
+      await R.updateSsid(gid, ssidId, { password: pw })
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Đổi mật khẩu WiFi “${String(body.name || ssidId).slice(0, 40)}”` }])
+      return json({ ok: true })
+    }
+
     // ---------- chỉ admin ----------
     needAdmin(s)
 
@@ -601,13 +622,6 @@ export default async (req: Request) => {
       await L([{ t: Date.now(), ok: true, by: s.name, text: `Sửa WiFi “${String(body.oldName || body.ssidId)}” (${changed || "không đổi"})` }])
       await buildSnapshot().catch(() => {})
       return json({ ok: true })
-    }
-    if (path === "/wifi/secret" && m === "POST") {
-      const gid = Number(body.gid)
-      if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
-      const { raw } = await R.ssidRaw(gid, Number(body.ssidId))
-      await L([{ t: Date.now(), ok: true, by: s.name, text: `Xem mật khẩu WiFi “${raw.ssidName}”` }])
-      return json({ password: raw.password ?? "" })
     }
     if (path === "/wifi/delete" && m === "POST") {
       const gid = Number(body.gid)
