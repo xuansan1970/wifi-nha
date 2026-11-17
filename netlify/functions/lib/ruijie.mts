@@ -1,6 +1,6 @@
 // Ruijie Cloud client — dùng đúng các API mà web cloud-as.ruijienetworks.com đang gọi.
 import { constants, publicEncrypt } from "node:crypto"
-import { envGet, store } from "./store.mts"
+import { envGet, getJSON, setJSON } from "./store.mts"
 
 const BASE = "https://cloud-as.ruijienetworks.com"
 const SERVICE = `${BASE}/webproxy/sso/back?rewrite=off&back=${encodeURIComponent(BASE + "/macc5/adminIntl/#/theme-gateway")}`
@@ -134,7 +134,7 @@ async function login(): Promise<Jar> {
 let sessionAt = 0
 async function getSession(force = false): Promise<Jar> {
   if (!force) {
-    const s: any = await store().get("session", { type: "json" })
+    const s: any = await getJSON<any>("session", null)
     if (s?.jar?.LT_SESSION && Date.now() - s.at < 6 * 3600_000) {
       sessionAt = s.at
       return s.jar
@@ -142,7 +142,7 @@ async function getSession(force = false): Promise<Jar> {
   }
   const jar = await login()
   sessionAt = Date.now()
-  await store().setJSON("session", { jar, at: sessionAt })
+  await setJSON("session", { jar, at: sessionAt })
   return jar
 }
 
@@ -187,7 +187,7 @@ export async function call(api: string, method: string, opts: CallOpts = {}): Pr
     ;({ res, json } = await doCall(jar))
   } else if (JSON.stringify(jar) !== before && jar.LT_SESSION) {
     // giữ cookie mới (SERVERID…) nếu server có cấp lại
-    await store().setJSON("session", { jar, at: sessionAt })
+    await setJSON("session", { jar, at: sessionAt })
   }
   if (!json) throw new RuijieError(`Ruijie trả về lỗi HTTP ${res.status}`, res.status)
   if (json.code !== 0) throw new RuijieError(json.msg || `Ruijie lỗi ${json.code}`, json.code)
