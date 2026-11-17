@@ -421,7 +421,13 @@ function personSheet(p) {
 
 /* ---------- Trang: WiFi (admin) ---------- */
 // Tab "WiFi & Hẹn giờ" (Xuân San): bật/tắt + giờ dùng → cấu hình từng router → hẹn giờ nâng cao
-function vWifiAll() { return header("WiFi & Hẹn giờ", `<button class="btn pri" id="wadd">${I.plus}<span>Tạo WiFi</span></button>`) + wifiHomeCard() + `<div class="card-h" style="margin:4px 0 10px"><h2 style="font-size:18px">Cấu hình từng router</h2></div>` + vWifi() + vRules(); }
+// Modem VNPT (không nằm trong Ruijie Cloud) — chỉ Quản trị thấy; chưa điều khiển từ xa được
+const VNPT_WIFI = ["Gia Dinh Xuan Tung_VNPT", "Gia Dinh Xuan Tung_VNPT_5G"];
+function vModem() {
+  if (!isAdmin()) return "";
+  return `<div class="card" style="margin-bottom:16px"><div class="card-h"><h2>Modem VNPT</h2></div>${VNPT_WIFI.map((n) => `<div class="row" style="cursor:default"><span class="av round" style="background:var(--pri);color:var(--pri-ink)">${I.wifi || ""}</span><div><div class="nm">${esc(n)}</div><div class="meta">Do modem nhà mạng phát — chưa bật/tắt từ xa được</div></div><span></span></div>`).join("")}<a class="btn block" href="http://192.168.1.1" target="_blank" rel="noopener" style="margin-top:12px">Mở trang modem (chỉ khi đang ở mạng nhà)</a></div>`;
+}
+function vWifiAll() { return header("WiFi & Hẹn giờ", `<button class="btn pri" id="wadd">${I.plus}<span>Tạo WiFi</span></button>`) + wifiHomeCard() + vModem() + `<div class="card-h" style="margin:4px 0 10px"><h2 style="font-size:18px">Cấu hình từng router</h2></div>` + vWifi() + vRules(); }
 function vWifi() {
   return `
   <div class="alert">${I.eye}<div>WiFi <b>ẩn</b> (IoT cho camera, hub…) vẫn hoạt động bình thường, chỉ không hiện khi dò WiFi. Tắt nhầm WiFi IoT sẽ làm camera mất kết nối.</div></div>
