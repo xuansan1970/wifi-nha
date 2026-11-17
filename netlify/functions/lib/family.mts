@@ -23,6 +23,7 @@ export type Family = {
   rules: NetRule[]
   timers: Timer[]
   limits: Limit[]
+  lim?: string[] // WiFi do "Giờ dùng WiFi" tắt (gid:ssidId) — tới giờ dùng phải tự bật lại dù trễ cron hay lỗi mạng
   changedAt?: number
   changedBy?: string
 }
@@ -38,6 +39,7 @@ export const loadFamily = async (): Promise<Family> => {
     rules: (f.rules ?? []).map((r: any) => ({ ...r, mode: r.mode === "ghost" ? "ghost" : "off" })),
     timers: f.timers ?? [],
     limits: f.limits ?? [],
+    lim: f.lim ?? [],
     changedAt: f.changedAt,
     changedBy: f.changedBy,
   }
@@ -56,14 +58,15 @@ export function isFamilySsid(gid: number, s: { id: number; name?: string; hidden
 // Trạng thái thật trên router (để nút bấm luôn khớp thực tế, kể cả khi bật/tắt lẻ từng WiFi)
 export function liveOf(snap: any, f: Family) {
   const g = ghostSet(f)
-  let on = 0, total = 0, rest = 0 // rest: WiFi tắt vì đang ngoài "giờ dùng"
+  let on = 0, total = 0, rest = 0 // rest: WiFi tắt vì đang ngoài "giờ dùng" (hoặc do giờ dùng tắt, chờ tự bật lại)
   const now = Date.now()
+  const lim = new Set(f.lim ?? [])
   for (const r of snap?.routers ?? [])
     for (const s of r.ssids ?? [])
       if (isFamilySsid(r.gid, s, g)) {
         total++
         if (s.enable) on++
-        else if (!inLimit(f, s.name, now)) rest++
+        else if (!inLimit(f, s.name, now) || lim.has(gk(r.gid, s.id))) rest++
       }
   return { on, total, rest }
 }
@@ -245,6 +248,7 @@ export async function setScene(scene: Scene, by: string): Promise<LogItem> {
   try {
     const r = await apply(f, scene)
     f.grant = null
+    f.lim = []
     f.changedAt = t
     f.changedBy = by
     await saveFamily(f)
@@ -332,17 +336,29 @@ export async function tickLimits(f: Family, from: number, to: number, now: numbe
     return false
   }
   const offs = new Map<number, number[]>(), ons = new Map<number, number[]>(), names = { off: new Set<string>(), on: new Set<string>() }
+  // lim: WiFi do chính "Giờ dùng" tắt → tới giờ dùng luôn tự bật lại (không phụ thuộc đúng phút bắt đầu, cron trễ hay lần trước lỗi)
+  const lim = new Set(f.lim ?? [])
+  let limChanged = false
   for (const r of snap.routers)
     for (const x of r.ssids) {
       if (!isFamilySsid(r.gid, x, g) || !limitOf(f, x.name)) continue
+      const k = gk(r.gid, x.id)
       const ok = inLimit(f, x.name, now)
+      if (x.enable && lim.delete(k)) limChanged = true // đã bật (tay hoặc đã mở) → bỏ theo dõi
       if (!ok && x.enable) (offs.set(r.gid, [...(offs.get(r.gid) ?? []), x.id]), names.off.add(x.name))
-      else if (ok && !x.enable && starts(x.name)) (ons.set(r.gid, [...(ons.get(r.gid) ?? []), x.id]), names.on.add(x.name))
+      else if (ok && !x.enable && (starts(x.name) || lim.has(k))) (ons.set(r.gid, [...(ons.get(r.gid) ?? []), x.id]), names.on.add(x.name))
     }
   const logs: LogItem[] = []
   for (const [want, map, ns] of [[false, offs, names.off], [true, ons, names.on]] as const) {
     if (!map.size) continue
     const res = await Promise.allSettled([...map].map(([gid, ids]) => R.setSsids(gid, ids, want)))
+    ;[...map].forEach(([gid, ids], i) => {
+      if (res[i].status !== "fulfilled") return
+      for (const id of ids) {
+        const k = gk(gid, id)
+        if (want ? lim.delete(k) : !lim.has(k) && lim.add(k)) limChanged = true
+      }
+    })
     await patchSnapshot((sn) => {
       ;[...map].forEach(([gid, ids], i) => {
         if (res[i].status !== "fulfilled") return
@@ -350,7 +366,12 @@ export async function tickLimits(f: Family, from: number, to: number, now: numbe
       })
     })
     const bad = res.filter((x) => x.status === "rejected").length
-    logs.push({ t: now, ok: bad < res.length, by: "Giờ dùng WiFi", role: "system", text: `${want ? "Tới giờ dùng, bật" : "Hết giờ dùng, tắt"} ${[...ns].join(", ")}${bad ? ` · ${bad} router lỗi` : ""}` })
+    logs.push({ t: now, ok: bad < res.length, by: "Giờ dùng WiFi", role: "system", text: `${want ? "Tới giờ dùng, bật" : "Hết giờ dùng, tắt"} ${[...ns].join(", ")}${bad ? ` · ${bad} router lỗi${want ? " (sẽ tự thử lại sau 5 phút)" : ""}` : ""}` })
+  }
+  if (limChanged) {
+    const cur = await loadFamily()
+    cur.lim = [...lim]
+    await saveFamily(cur)
   }
   return logs
 }
