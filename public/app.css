@@ -374,3 +374,4 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 @media (max-width:719px),(pointer:coarse){.btn.sm,.seg button{min-height:44px}.btn.sm.icon{width:44px}}
 /* Điện thoại: nhãn "Đang dùng" không đè tên phím nhanh */
 @media (max-width:719px){.pz-key:has(.pz-now) b{padding-right:88px}}
+@media (max-width:719px),(pointer:coarse){.search{height:44px}}
