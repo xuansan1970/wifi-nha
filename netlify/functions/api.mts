@@ -186,6 +186,8 @@ export default async (req: Request) => {
   const body: any = m === "GET" || m === "DELETE" ? {} : await req.json().catch(() => ({}))
 
   try {
+    // Chức năng xem camera đang tạm gỡ (code vẫn giữ). Bật lại: đặt biến CAM_ENABLED=1
+    if (path.startsWith("/cam/") && envGet("CAM_ENABLED") !== "1") throw new Http(404, "Chức năng camera đang tạm tắt")
     // ---------- công khai ----------
     if (path === "/health")
       return json({

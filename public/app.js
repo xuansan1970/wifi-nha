@@ -63,11 +63,14 @@ const ini = (n) => String(n || "?").trim().split(/\s+/).map((w) => w[0]).slice(-
 
 /* ---------- Trạng thái ---------- */
 const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0, cam: { loading: false, gatewayUrl: "", streams: [], pcs: {}, recs: {}, muted: {}, error: null, alarmOn: false } };
-const ADMIN_TABS = [["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["cameras", "Camera", "camera"], ["log", "Nhật ký", "log"], ["settings", "Cài đặt", "gear"]];
+// Công tắc chức năng xem camera: false = tạm gỡ (giữ nguyên code). Bật lại: đổi thành true và đặt biến CAM_ENABLED=1 ở backend
+const CAMERA_ON = false;
+const noCam = (a) => (CAMERA_ON ? a : a.filter((t) => (Array.isArray(t) ? t[0] : t) !== "cameras"));
+const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["cameras", "Camera", "camera"], ["log", "Nhật ký", "log"], ["settings", "Cài đặt", "gear"]]);
 // Mục cũ đã gộp: Gia đình → Thiết bị (Các con), Hẹn giờ → WiFi & Hẹn giờ, Dữ liệu → mở từ Nhật ký
 const TAB_ALIAS = { family: "devices", rules: "wifi" };
-const PARENT_TABS = [["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["settings", "Tài khoản", "user"]];
-const MOBILE_ADMIN = ["home", "devices", "wifi", "cameras", "more"];
+const PARENT_TABS = noCam([["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["settings", "Tài khoản", "user"]]);
+const MOBILE_ADMIN = noCam(["home", "devices", "wifi", "cameras", "more"]);
 const isAdmin = () => S.me?.role === "admin";
 // Quản lý các con / thiết bị / giờ nghỉ / giới hạn giờ: Xuân San và Ba Mẹ đều dùng được
 const canFamily = () => !!S.me;
@@ -236,6 +239,7 @@ function shell() {
 }
 function go(t) {
   if (t === "more") return moreSheet();
+  if (t === "cameras" && !CAMERA_ON) t = "home";
   // Gộp tab chỉ áp dụng cho Xuân San; Ba Mẹ vẫn có tab "Các con" riêng
   if (isAdmin()) {
     if (t === "family") S.devTab = "people";
