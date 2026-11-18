@@ -38,7 +38,7 @@ export async function restoreTest() {
   const out: Record<string, boolean> = {}
   for (const k of BACKUP_KEYS) {
     await setJSON(`__restoretest_${k}`, wire.data[k])
-    const back = await getJSON<any>(`__restoretest_${k}`, undefined)
+    const back = await getJSON<any>(`__restoretest_${k}`, null)
     out[k] = JSON.stringify(back) === JSON.stringify(bk.data[k])
     await delKey(`__restoretest_${k}`)
   }
