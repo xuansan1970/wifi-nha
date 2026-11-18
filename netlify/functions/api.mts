@@ -3,7 +3,7 @@ import { raise, sendMail } from "./lib/notify.mts"
 import { BACKUP_KEYS, CONFIG_FIELDS, restoreTest, runBackup, runDigest } from "./lib/backup.mts"
 import type { Config } from "@netlify/functions"
 import {
-  cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, unghost, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
+  cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, unghost, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, markManual, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
 } from "./lib/family.mts"
 import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
@@ -365,6 +365,7 @@ export default async (req: Request) => {
       )
       await L([log])
       if (!log.ok) throw new Http(502, log.text)
+      await markManual(s.name).catch(() => {})
       return json({ ok: true })
     }
     if (path === "/unblock" && m === "POST") {

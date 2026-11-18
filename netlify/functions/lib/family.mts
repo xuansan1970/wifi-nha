@@ -111,6 +111,28 @@ export function inOffWindow(rules: NetRule[], ms: number): NetRule | null {
   return null
 }
 
+// ======== BẢNG ƯU TIÊN (cao → thấp) — chỗ DUY NHẤT quyết định ai thắng khi các thứ chạm nhau ========
+// 1. Bấm tay (Mở/Tắt/Giả lỗi): có hiệu lực ngay, huỷ "cho dùng thêm", và được GIỮ cho tới lần đổi kế tiếp theo lịch.
+// 2. "Cho dùng thêm" (grant): mở mạng tới hết giờ; trong lúc này lịch và giờ dùng WiFi đứng yên. Hết giờ → về chế độ của lịch lúc đó.
+// 3. Hẹn giờ một lần (timers): tới hạn thì áp dụng như bấm tay (nhiều cái cùng hạn: lấy cái muộn nhất).
+// 4. Lịch hằng tuần (rules): mỗi lần đổi (vd 22:00 tắt, 06:30 mở) áp dụng như bấm tay. Nếu cron lỡ lần đổi, lần tick sau BÙ ngay
+//    (trừ khi có người bấm tay SAU lần đổi đó) — xem lastFlip.
+// 5. Giờ dùng WiFi (limits): chỉ chạy khi mạng đang "mở thường" (không giả lỗi, không dùng thêm); tự bật lại tới giờ dùng.
+// Quy tắc chung: bấm tay sau lần đổi của lịch thì thắng; lịch lần đổi sau thì thắng lại.
+
+// Trạng thái lịch yêu cầu lúc `now` và thời điểm bắt đầu (lần đổi gần nhất, tìm lùi tối đa 48h)
+export function lastFlip(rules: NetRule[], now: number): { scene: Scene; since: number } | null {
+  const active = rules.filter((r) => r.enabled)
+  if (!active.length) return null
+  const sceneAt = (ms: number): Scene => inOffWindow(active, ms)?.mode ?? "on"
+  const minute = Math.floor(now / 60000) * 60000
+  const scene = sceneAt(minute)
+  const limit = minute - 48 * 3600_000
+  let since = minute
+  while (since > limit && sceneAt(since - 60000) === scene) since -= 60000
+  return { scene, since }
+}
+
 // Lần đổi trạng thái kế tiếp theo lịch (để hiện "Tự tắt lúc 22:00")
 export function nextChange(rules: NetRule[], now = Date.now()) {
   const start = Math.ceil(now / 60000) * 60000
@@ -256,6 +278,13 @@ export async function setScene(scene: Scene, by: string): Promise<LogItem> {
   } catch (e: any) {
     return { t, ok: false, by, text: `Lỗi ${SCENE_VI[scene].toLowerCase()}: ${e.message}` }
   }
+}
+// Bật/tắt lẻ 1 WiFi bằng tay cũng là "bấm tay": lịch không được bù đè lên cho tới lần đổi kế tiếp
+export async function markManual(by: string) {
+  const f = await loadFamily()
+  f.changedAt = Date.now()
+  f.changedBy = by
+  await saveFamily(f)
 }
 export const setNet = (on: boolean, by: string) => setScene(on ? "on" : "off", by)
 
@@ -445,6 +474,13 @@ export async function tickFamily(from: number, to: number, now: number): Promise
       logs.push({ ...l, role: "system" })
       if (l.ok) cur = want
     }
+  }
+  // Bù lần đổi bị lỡ (cron trễ >10′, router offline đúng giờ…): mạng đang khác lịch mà chưa ai bấm tay sau lần đổi gần nhất
+  const f2 = await loadFamily()
+  const want = f2.grant ? null : lastFlip(f2.rules, now)
+  if (want && (f2.changedAt ?? 0) < want.since && cur !== want.scene) {
+    const l = await setScene(want.scene, "Lịch (bù lần đổi bị lỡ)")
+    logs.push({ ...l, role: "system" })
   }
   return [...logs, ...(await tickLimits(await loadFamily(), from, to, now))]
 }

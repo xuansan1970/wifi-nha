@@ -75,3 +75,42 @@ test("giờ dùng WiFi: 24:00 hợp lệ, khung ngược bị từ chối, WiFi 
   assert.throws(() => cleanLimit({ ssid: "Nha", days: [1], wins: [{ 0: "22:00", 1: "06:00" }] }))
   assert.ok(inLimit(fam([l]), "Khac", vnMs(MON, "03:00")))
 })
+
+// ---- Bảng ưu tiên: bù lần đổi bị lỡ (lastFlip) ----
+import { lastFlip } from "../netlify/functions/lib/family.mts"
+
+test("lastFlip: 07:00 sáng → lịch yêu cầu MỞ kể từ 06:30 (cron lỡ 06:30 vẫn bù được)", () => {
+  const w = lastFlip([rule()], vnMs(TUE, "07:00"))!
+  assert.equal(w.scene, "on")
+  assert.equal(w.since, vnMs(TUE, "06:30"))
+})
+
+test("lastFlip: 23:10 → lịch yêu cầu TẮT kể từ 22:00", () => {
+  const w = lastFlip([rule()], vnMs(MON, "23:10"))!
+  assert.equal(w.scene, "off")
+  assert.equal(w.since, vnMs(MON, "22:00"))
+})
+
+test("lastFlip: chế độ giả lỗi (ghost) được giữ", () => {
+  assert.equal(lastFlip([rule({ mode: "ghost" })], vnMs(MON, "23:10"))!.scene, "ghost")
+})
+
+test("lastFlip: không có lịch bật → không bù", () => {
+  assert.equal(lastFlip([rule({ enabled: false })], vnMs(MON, "23:10")), null)
+  assert.equal(lastFlip([], vnMs(MON, "23:10")), null)
+})
+
+test("quy tắc bù: bấm tay SAU lần đổi thì thắng lịch; bấm tay TRƯỚC lần đổi thì lịch thắng", () => {
+  const w = lastFlip([rule()], vnMs(MON, "23:10"))! // since = 22:00
+  const needsCatchUp = (changedAt: number, cur: string) => changedAt < w.since && cur !== w.scene
+  assert.equal(needsCatchUp(vnMs(MON, "22:30"), "on"), false, "Ba bấm mở lúc 22:30 → giữ")
+  assert.equal(needsCatchUp(vnMs(MON, "18:00"), "on"), true, "chưa ai chạm từ chiều, mạng vẫn mở → tắt bù")
+  assert.equal(needsCatchUp(vnMs(MON, "18:00"), "off"), false, "đã đúng lịch → không làm gì")
+})
+
+test("hai lịch chồng nhau: lịch đầu tiên đang trong khung thì quyết định", () => {
+  const a = rule({ id: "a", offAt: "22:00", onAt: "06:30", mode: "off" })
+  const b = rule({ id: "b", offAt: "21:00", onAt: "23:00", mode: "ghost" })
+  assert.equal(lastFlip([a, b], vnMs(MON, "21:30"))!.scene, "ghost")
+  assert.equal(lastFlip([a, b], vnMs(MON, "22:30"))!.scene, "off")
+})

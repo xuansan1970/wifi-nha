@@ -56,6 +56,23 @@ async function retry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 }
 const hashText = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36)
 
+// Đọc lại danh sách chặn thật trên từng router: lệnh chặn/mở chặn phải khớp thực tế (kiểm lần 1 sau 1s, lần 2 sau 4s)
+async function verifyBlocked(macs: string[], gids: number[], want: boolean) {
+  for (let k = 0; k < 2; k++) {
+    await sleep(k ? 4000 : 1000)
+    const bad = new Set<number>()
+    await Promise.all(
+      gids.map(async (gid) => {
+        const live = await R.listBlocked(gid).catch(() => null)
+        if (!live) return
+        if (macs.some((m) => live.includes(R.macKey(m)) !== want)) bad.add(gid)
+      }),
+    )
+    if (!bad.size) return
+    if (k) throw new Error(`router chưa ${want ? "chặn" : "mở chặn"} xong (router ${[...bad].join(", ")})`)
+  }
+}
+
 export async function exec(a: Action, by: string): Promise<LogItem> {
   const t = Date.now()
   try {
@@ -89,6 +106,7 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
     const key = `${a.target.kind}:${a.target.id}`
     if (a.kind === "block") {
       await retry(() => blockMacs(macs, gids))
+      await verifyBlocked(macs, gids, true)
       await patchSnapshot((sn) => {
         for (const r of sn.routers) r.blocked = [...new Set([...r.blocked, ...macs])]
       })
@@ -99,6 +117,7 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
       return { t, ok: true, by, text: `Chặn mạng ${a.label}${a.reason ? ` (${a.reason})` : ""}` }
     }
     await retry(() => unblockMacs(macs, gids))
+    await verifyBlocked(macs, gids, false)
     await patchSnapshot((sn) => {
       for (const r of sn.routers) r.blocked = r.blocked.filter((m: string) => !macs.includes(m))
     })
