@@ -56,6 +56,9 @@ const DOX = () => (globalThis as any).__CF_DO as { bump(k: string, w: number): P
 export const bump = (key: string, windowMs: number) => DOX().bump(key, windowMs)
 export const peek = (key: string, windowMs: number) => DOX().peek(key, windowMs)
 export const clearCount = (key: string) => DOX().clear(key)
+type AuditDO = { auditAdd(rows: any[]): Promise<void>; auditList(limit: number, beforeId: number): Promise<any[]> }
+export const auditAdd = async (rows: any[]) => void (await ((globalThis as any).__CF_DO as AuditDO | undefined)?.auditAdd(rows))
+export const auditList = (limit: number, beforeId = 0) => ((globalThis as any).__CF_DO as AuditDO).auditList(limit, beforeId)
 async function legacyGet<T>(key: string): Promise<T | null> {
   const kv = (globalThis as any).__CF_KV
   if (!kv) return null

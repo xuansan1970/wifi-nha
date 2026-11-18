@@ -1,4 +1,4 @@
-import { getJSON, setJSON } from "./store.mts"
+import { auditAdd, getJSON, setJSON } from "./store.mts"
 import * as R from "./ruijie.mts"
 
 export type Target = { kind: "device" | "person"; id: string }
@@ -40,7 +40,7 @@ export type Dev = {
   kind?: string
   vendor?: string
 }
-export type LogItem = { t: number; text: string; ok: boolean; by: string; role?: "admin" | "parent" | "system" }
+export type LogItem = { t: number; text: string; ok: boolean; by: string; role?: "admin" | "parent" | "system"; ip?: string; dev?: string; before?: string; after?: string }
 
 export const loadState = async (): Promise<State> => {
   const s: any = await getJSON("state", {})
@@ -65,6 +65,8 @@ export const saveDevices = (d: Record<string, Dev>) => setJSON("devices", d)
 
 export async function addLog(items: LogItem[]) {
   if (!items.length) return
+  // Bản lưu vĩnh viễn, chỉ-thêm: lỗi ghi bản này không được làm hỏng việc chính
+  await auditAdd(items).catch((e) => console.warn("audit lỗi", e?.message))
   const cur = await getJSON<LogItem[]>("log", [])
   await setJSON("log", [...items, ...cur].slice(0, 300))
 }

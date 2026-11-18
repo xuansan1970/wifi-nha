@@ -12,7 +12,7 @@ import { KIND_VI } from "./lib/smart.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
-import { cacheGet, cachePut, envGet, getJSON, isKvLimit, setJSON } from "./lib/store.mts"
+import { auditList, cacheGet, cachePut, envGet, getJSON, isKvLimit, setJSON } from "./lib/store.mts"
 
 const json = (data: any, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
@@ -204,7 +204,7 @@ export default async (req: Request) => {
       const ip = req.headers.get("cf-connecting-ip") ?? "?"
       const r = await login(String(body.uid ?? ""), String(body.pin ?? ""), ip)
       if (!r.user) {
-        await addLog([{ t: Date.now(), ok: false, by: body.uid === "bame" ? "Ba Mẹ" : "Đăng nhập", role: body.uid === "bame" ? "parent" : "admin", text: `Nhập sai PIN tài khoản ${body.uid === "bame" ? "Ba Mẹ" : String(body.uid).slice(0, 20)} (IP ${ip})` }])
+        await addLog([{ t: Date.now(), ok: false, by: body.uid === "bame" ? "Ba Mẹ" : "Đăng nhập", role: body.uid === "bame" ? "parent" : "admin", ip, dev: (req.headers.get("user-agent") ?? "").slice(0, 120), text: `Nhập sai PIN tài khoản ${body.uid === "bame" ? "Ba Mẹ" : String(body.uid).slice(0, 20)} (IP ${ip})` }])
         return json({ error: r.error }, 401)
       }
       if (r.user.role === "parent") await addLog([{ t: Date.now(), ok: true, by: r.user.name, role: "parent", text: `${r.user.name} đăng nhập` }])
@@ -234,7 +234,9 @@ export default async (req: Request) => {
     const s = await readSession(req)
     if (!s) return json({ error: "Cần đăng nhập" }, 401)
 
-    const L = (items: LogItem[]) => addLog(items.map((i) => ({ ...i, role: s.role })))
+    const ip = req.headers.get("cf-connecting-ip") ?? "?"
+    const dev = (req.headers.get("user-agent") ?? "").slice(0, 120)
+    const L = (items: LogItem[]) => addLog(items.map((i) => ({ ip, dev, ...i, role: s.role })))
     const parent = s.role !== "admin"
     if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
@@ -297,6 +299,16 @@ export default async (req: Request) => {
     if (path === "/log") {
       needAdmin(s)
       return json({ log: await getLog() })
+    }
+    // Nhật ký chỉ-thêm, lưu vĩnh viễn (chỉ Xuân San xem). ?format=csv để tải về, ?before=<id> để lật trang
+    if (path === "/audit") {
+      needAdmin(s)
+      const rows = await auditList(Number(url.searchParams.get("limit")) || 200, Number(url.searchParams.get("before")) || 0)
+      if (url.searchParams.get("format") !== "csv") return json({ rows })
+      const q = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`
+      const head = "id,thoi_gian_VN,ok,nguoi,vai_tro,noi_dung,ip,thiet_bi,truoc,sau"
+      const body = rows.map((r: any) => [r.id, new Date(r.t + 7 * 3600_000).toISOString().replace("T", " ").slice(0, 19), r.ok, q(r.by), r.role ?? "", q(r.text), r.ip ?? "", q(r.dev), q(r.before), q(r.after)].join(","))
+      return new Response("\ufeff" + [head, ...body].join("\n"), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": "attachment; filename=wifi-nha-audit.csv" } })
     }
 
     // ---- Camera WebRTC (go2rtc: admin + ba mẹ đều xem được, chỉ Xuân San chỉnh gateway) ----
@@ -416,9 +428,10 @@ export default async (req: Request) => {
       const g = ghostSet(await loadFamily())
       const known = snap.routers.some((r: any) => r.ssids.some((x: any) => x.name === l.ssid && isFamilySsid(r.gid, x, g)))
       if (!known) throw new Http(403, "WiFi này không đặt giờ được")
+      const prevLimit = (await loadFamily()).limits.find((x) => x.id === l.id || x.ssid === l.ssid)
       await saveLimits((ls) => [...ls.filter((x) => x.id !== l.id && x.ssid !== l.ssid), l])
       const DV = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"]
-      await L([{ t: Date.now(), ok: true, by: s.name, text: `Đặt giờ dùng WiFi “${l.ssid}”: ${l.wins.map((w) => w.join("–")).join(", ")} · ${l.days.length === 7 ? "mỗi ngày" : l.days.map((d) => DV[d]).join(" ")}${l.enabled ? "" : " (đang tắt giới hạn)"}` }])
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Đặt giờ dùng WiFi “${l.ssid}”: ${l.wins.map((w) => w.join("–")).join(", ")} · ${l.days.length === 7 ? "mỗi ngày" : l.days.map((d) => DV[d]).join(" ")}${l.enabled ? "" : " (đang tắt giới hạn)"}`, before: prevLimit ? JSON.stringify(prevLimit) : undefined, after: JSON.stringify(l) }])
       // áp dụng ngay nếu mạng đang mở bình thường
       // Áp dụng ngay: WiFi đang ngoài giờ dùng thì tắt (không bật/tắt WiFi khác)
       const now = Date.now()
@@ -430,7 +443,7 @@ export default async (req: Request) => {
       const id = path.slice("/net/limits/".length)
       const old = (await loadFamily()).limits.find((x) => x.id === id)
       await saveLimits((ls) => ls.filter((x) => x.id !== id))
-      if (old) await L([{ t: Date.now(), ok: true, by: s.name, text: `Bỏ giờ dùng WiFi “${old.ssid}” (dùng tự do)` }])
+      if (old) await L([{ t: Date.now(), ok: true, by: s.name, text: `Bỏ giờ dùng WiFi “${old.ssid}” (dùng tự do)`, before: JSON.stringify(old) }])
       return json({ ok: true, net: await familyView() })
     }
     if (path === "/net/rules" && m === "POST") {
@@ -440,16 +453,17 @@ export default async (req: Request) => {
       } catch (e: any) {
         throw new Http(400, e.message)
       }
-      const exists = (await loadFamily()).rules.some((x) => x.id === r.id)
+      const prev = (await loadFamily()).rules.find((x) => x.id === r.id)
+      const exists = !!prev
       await saveRules((rules) => (exists ? rules.map((x) => (x.id === r.id ? r : x)) : [...rules, r].slice(-20)))
-      await L([{ t: Date.now(), ok: true, by: s.name, text: `${exists ? "Sửa" : "Thêm"} lịch mạng “${r.name}”: tắt ${r.offAt} → mở ${r.onAt}${r.enabled ? "" : " (đang tắt lịch)"}` }])
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `${exists ? "Sửa" : "Thêm"} lịch mạng “${r.name}”: tắt ${r.offAt} → mở ${r.onAt}${r.enabled ? "" : " (đang tắt lịch)"}`, before: prev ? JSON.stringify(prev) : undefined, after: JSON.stringify(r) }])
       return json({ ok: true, net: await familyView() })
     }
     if (path.startsWith("/net/rules/") && m === "DELETE") {
       const id = path.slice("/net/rules/".length)
       const r = (await loadFamily()).rules.find((x) => x.id === id)
       await saveRules((rules) => rules.filter((x) => x.id !== id))
-      if (r) await L([{ t: Date.now(), ok: true, by: s.name, text: `Xoá lịch mạng “${r.name}”` }])
+      if (r) await L([{ t: Date.now(), ok: true, by: s.name, text: `Xoá lịch mạng “${r.name}”`, before: JSON.stringify(r) }])
       return json({ ok: true, net: await familyView() })
     }
 

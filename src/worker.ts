@@ -31,6 +31,26 @@ export class StoreDO extends DurableObject {
   async clear(key: string) {
     await this.ctx.storage.delete(key)
   }
+  // Nhật ký chỉ-thêm (append-only): chỉ có INSERT và đọc, không có sửa/xoá. Bảng nằm trong SQLite của DO.
+  private auditInit() {
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, t INTEGER NOT NULL, ok INTEGER NOT NULL, by TEXT, role TEXT, text TEXT, ip TEXT, dev TEXT, before TEXT, after TEXT)",
+    )
+  }
+  async auditAdd(rows: any[]) {
+    this.auditInit()
+    for (const r of rows)
+      this.ctx.storage.sql.exec(
+        "INSERT INTO audit (t,ok,by,role,text,ip,dev,before,after) VALUES (?,?,?,?,?,?,?,?,?)",
+        r.t, r.ok ? 1 : 0, r.by ?? null, r.role ?? null, r.text ?? null, r.ip ?? null, r.dev ?? null, r.before ?? null, r.after ?? null,
+      )
+  }
+  async auditList(limit: number, beforeId: number) {
+    this.auditInit()
+    return this.ctx.storage.sql
+      .exec("SELECT * FROM audit WHERE id < ? ORDER BY id DESC LIMIT ?", beforeId || 9e15, Math.min(Math.max(limit, 1), 5000))
+      .toArray()
+  }
 }
 
 function initEnv(env: Env) {
