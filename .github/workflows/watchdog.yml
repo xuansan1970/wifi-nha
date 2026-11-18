@@ -1,4 +1,5 @@
 name: watchdog
+# (v2)
 # Kiểm tra độc lập (ngoài Cloudflare) mỗi ~15 phút: nếu bộ chạy lịch ngừng hoặc app không phản hồi thì job thất bại
 # → GitHub gửi email báo lỗi workflow tới chủ repo. Lưu ý: GitHub tự tắt workflow theo lịch sau 60 ngày repo không có hoạt động.
 on:
