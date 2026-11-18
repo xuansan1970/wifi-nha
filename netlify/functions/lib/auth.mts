@@ -1,5 +1,6 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto"
-import { envGet, getJSON, setJSON } from "./store.mts"
+import { bump, clearCount, envGet, getJSON, peek, setJSON } from "./store.mts"
+import { raise } from "./notify.mts"
 
 export type Role = "admin" | "parent"
 export type User = { id: string; name: string; role: Role; salt: string; hash: string }
@@ -91,23 +92,29 @@ export const setCookie = (tok: string, role: Role) =>
   `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${TTL[role] / 1000}`
 export const clearCookie = `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=0`
 
-// Chống dò PIN theo từng tài khoản: sai 5 lần → khoá 15 phút
-export async function login(uid: string, pin: string): Promise<{ user?: User; error?: string }> {
+// Chống dò PIN: mỗi (tài khoản + IP) sai 5 lần → khoá 15 phút; tổng theo tài khoản sai 20 lần → khoá 15 phút + báo email
+const WIN = 15 * 60000
+export async function login(uid: string, pin: string, ip = "?"): Promise<{ user?: User; error?: string }> {
   const users = await loadUsers()
   const group = uid === PARENT_GROUP ? users.filter((x) => x.role === "parent") : users.filter((x) => x.id === uid)
   if (!group.length) return { error: "Chọn tài khoản" }
-  const key = `pinfail-${uid}`
-  const f = await getJSON<{ n: number; until: number }>(key, { n: 0, until: 0 })
-  if (f.until > Date.now()) return { error: `Sai quá nhiều lần, thử lại sau ${Math.ceil((f.until - Date.now()) / 60000)} phút` }
+  const kIp = `pin-ip-${uid}-${ip}`
+  const kAll = `pin-all-${uid}`
+  const [ci, ca] = await Promise.all([peek(kIp, WIN), peek(kAll, WIN)])
+  if (ci.n >= 5 || ca.n >= 20) {
+    const left = Math.ceil((Math.max(ci.n >= 5 ? ci.start : 0, ca.n >= 20 ? ca.start : 0) + WIN - Date.now()) / 60000)
+    return { error: `Sai quá nhiều lần, thử lại sau ${Math.max(1, left)} phút` }
+  }
   for (const u of group) {
     const a = Buffer.from(hashPin(String(pin), u.salt))
     const b = Buffer.from(u.hash)
     if (a.length === b.length && timingSafeEqual(a, b)) {
-      if (f.n) await setJSON(key, { n: 0, until: 0 })
+      if (ci.n) await clearCount(kIp)
       return { user: u }
     }
   }
-  const n = f.n + 1
-  await setJSON(key, n >= 5 ? { n: 0, until: Date.now() + 15 * 60000 } : { n, until: 0 })
-  return { error: n >= 5 ? "Sai 5 lần — khoá 15 phút" : `Sai mã PIN (còn ${5 - n} lần thử)` }
+  const [ni, na] = await Promise.all([bump(kIp, WIN), bump(kAll, WIN)])
+  if (na.n === 20)
+    await raise(`pin-all-${uid}`, "Có người đang dò PIN WiFi Nhà", `Tài khoản "${uid}" bị nhập sai PIN 20 lần trong 15 phút (lần gần nhất từ IP ${ip}). Đã khoá đăng nhập tài khoản này 15 phút.`, 6 * 3600e3, true)
+  return { error: ni.n >= 5 ? "Sai 5 lần — khoá 15 phút" : `Sai mã PIN (còn ${5 - ni.n} lần thử)` }
 }

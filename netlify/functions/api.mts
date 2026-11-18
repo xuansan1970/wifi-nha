@@ -198,9 +198,10 @@ export default async (req: Request) => {
       })
     if (path === "/users" && m === "GET") return json({ users: await publicUsers() })
     if (path === "/login" && m === "POST") {
-      const r = await login(String(body.uid ?? ""), String(body.pin ?? ""))
+      const ip = req.headers.get("cf-connecting-ip") ?? "?"
+      const r = await login(String(body.uid ?? ""), String(body.pin ?? ""), ip)
       if (!r.user) {
-        if (body.uid === "bame") await addLog([{ t: Date.now(), ok: false, by: "Ba Mẹ", role: "parent", text: "Nhập sai PIN tài khoản Ba Mẹ" }])
+        await addLog([{ t: Date.now(), ok: false, by: body.uid === "bame" ? "Ba Mẹ" : "Đăng nhập", role: body.uid === "bame" ? "parent" : "admin", text: `Nhập sai PIN tài khoản ${body.uid === "bame" ? "Ba Mẹ" : String(body.uid).slice(0, 20)} (IP ${ip})` }])
         return json({ error: r.error }, 401)
       }
       if (r.user.role === "parent") await addLog([{ t: Date.now(), ok: true, by: r.user.name, role: "parent", text: `${r.user.name} đăng nhập` }])
@@ -290,7 +291,10 @@ export default async (req: Request) => {
       await buildSnapshot()
       return json(await view(60_000, s))
     }
-    if (path === "/log") return json({ log: await getLog() })
+    if (path === "/log") {
+      needAdmin(s)
+      return json({ log: await getLog() })
+    }
 
     // ---- Camera WebRTC (go2rtc: admin + ba mẹ đều xem được, chỉ Xuân San chỉnh gateway) ----
     if (path === "/cam/config" && m === "GET") {
@@ -340,6 +344,7 @@ export default async (req: Request) => {
       return json({ ok: true })
     }
     if (path === "/reboot" && m === "POST") {
+      needAdmin(s)
       const all = await gids()
       const target = body.gid === "all" ? all : [Number(body.gid)].filter((g) => all.includes(g))
       if (!target.length) throw new Http(400, "Router không hợp lệ")
@@ -634,13 +639,20 @@ export default async (req: Request) => {
       return json({ ok: true })
     }
 
-    if (path === "/inventory") return json(await inventory())
+    if (path === "/inventory") {
+      needAdmin(s)
+      return json(await inventory())
+    }
     if (path === "/pin" && m === "POST") {
+      needAdmin(s)
       await setPin(String(body.uid), String(body.pin))
       await L([{ t: Date.now(), ok: true, by: s.name, text: `Đổi mã PIN tài khoản ${body.uid}` }])
       return json({ ok: true })
     }
-    if (path === "/accounts") return json({ users: await allUsers() })
+    if (path === "/accounts") {
+      needAdmin(s)
+      return json({ users: await allUsers() })
+    }
 
     throw new Http(404, "Không tìm thấy")
   } catch (e: any) {

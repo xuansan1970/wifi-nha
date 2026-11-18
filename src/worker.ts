@@ -16,6 +16,21 @@ export class StoreDO extends DurableObject {
   async put(key: string, value: any) {
     await this.ctx.storage.put(key, value)
   }
+  // Bộ đếm nguyên tử (DO chạy tuần tự nên không bị đua khi 2 yêu cầu cùng lúc): n lần trong cửa sổ windowMs
+  async bump(key: string, windowMs: number) {
+    const now = Date.now()
+    const c: any = await this.ctx.storage.get(key)
+    const cur = c && now - c.start <= windowMs ? { n: c.n + 1, start: c.start } : { n: 1, start: now }
+    await this.ctx.storage.put(key, cur)
+    return cur
+  }
+  async peek(key: string, windowMs: number) {
+    const c: any = await this.ctx.storage.get(key)
+    return c && Date.now() - c.start <= windowMs ? c : { n: 0, start: 0 }
+  }
+  async clear(key: string) {
+    await this.ctx.storage.delete(key)
+  }
 }
 
 function initEnv(env: Env) {

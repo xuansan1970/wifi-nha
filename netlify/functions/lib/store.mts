@@ -51,6 +51,11 @@ export const store = () => {
 // Trước 16/11/2026 dữ liệu nằm ở KV (gói Free chỉ 1.000 lần ghi/ngày, hết thì lưu tạm từng data center → mỗi máy thấy 1 kiểu).
 // Lần đầu đọc 1 key chưa có trong Durable Object: lấy bản mới nhất từ KV/bản tạm rồi chép sang.
 const DO = () => (globalThis as any).__CF_DO as { get(k: string): Promise<any>; put(k: string, v: any): Promise<void> } | undefined
+type Counter = { n: number; start: number }
+const DOX = () => (globalThis as any).__CF_DO as { bump(k: string, w: number): Promise<Counter>; peek(k: string, w: number): Promise<Counter>; clear(k: string): Promise<void> }
+export const bump = (key: string, windowMs: number) => DOX().bump(key, windowMs)
+export const peek = (key: string, windowMs: number) => DOX().peek(key, windowMs)
+export const clearCount = (key: string) => DOX().clear(key)
 async function legacyGet<T>(key: string): Promise<T | null> {
   const kv = (globalThis as any).__CF_KV
   if (!kv) return null
