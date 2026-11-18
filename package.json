@@ -10,5 +10,8 @@
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0",
     "wrangler": "^4.162.0"
+  },
+  "scripts": {
+    "test": "esbuild test/*.test.mts --bundle --platform=node --format=esm --outdir=.test-build --out-extension:.js=.mjs --log-level=warning && node --test \".test-build/*.test.mjs\""
   }
 }
