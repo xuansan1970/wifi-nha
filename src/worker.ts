@@ -14,7 +14,32 @@ export class StoreDO extends DurableObject {
     return this.ctx.storage.get(key)
   }
   async put(key: string, value: any) {
+    // Giữ phiên bản cũ của lịch/cài đặt trước khi ghi đè (để quay lại được)
+    if (["family", "state", "meta"].includes(key)) {
+      const old = await this.ctx.storage.get(key)
+      // chỉ so phần cấu hình (bỏ trạng thái chạy như lastTick, on, ghost, grant…) để không sinh phiên bản mỗi 5 phút
+      const cfg = (v: any) => JSON.stringify(key === "family" ? { r: v?.rules, l: v?.limits, t: v?.timers } : key === "state" ? { r: v?.rules, t: v?.temps, p: v?.people } : v)
+      const oldJ = old === undefined ? null : JSON.stringify(old)
+      if (oldJ !== null && cfg(old) !== cfg(value)) {
+        this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS versions (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT NOT NULL, t INTEGER NOT NULL, data TEXT NOT NULL)")
+        this.ctx.storage.sql.exec("INSERT INTO versions (k,t,data) VALUES (?,?,?)", key, Date.now(), oldJ)
+        this.ctx.storage.sql.exec("DELETE FROM versions WHERE k=? AND id NOT IN (SELECT id FROM versions WHERE k=? ORDER BY id DESC LIMIT 60)", key, key)
+      }
+    }
     await this.ctx.storage.put(key, value)
+  }
+  async versions(key: string, withData = false) {
+    this.ctx.storage.sql.exec("CREATE TABLE IF NOT EXISTS versions (id INTEGER PRIMARY KEY AUTOINCREMENT, k TEXT NOT NULL, t INTEGER NOT NULL, data TEXT NOT NULL)")
+    return this.ctx.storage.sql
+      .exec(`SELECT id, t, ${withData ? "data" : "length(data) AS bytes"} FROM versions WHERE k=? ORDER BY id DESC LIMIT 60`, key)
+      .toArray()
+  }
+  async versionGet(id: number) {
+    const r = this.ctx.storage.sql.exec("SELECT k, data FROM versions WHERE id=?", id).toArray()[0] as any
+    return r ? { k: r.k as string, value: JSON.parse(r.data) } : null
+  }
+  async del(key: string) {
+    await this.ctx.storage.delete(key)
   }
   // Bộ đếm nguyên tử (DO chạy tuần tự nên không bị đua khi 2 yêu cầu cùng lúc): n lần trong cửa sổ windowMs
   async bump(key: string, windowMs: number) {

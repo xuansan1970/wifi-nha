@@ -57,6 +57,10 @@ export const bump = (key: string, windowMs: number) => DOX().bump(key, windowMs)
 export const peek = (key: string, windowMs: number) => DOX().peek(key, windowMs)
 export const clearCount = (key: string) => DOX().clear(key)
 type AuditDO = { auditAdd(rows: any[]): Promise<void>; auditList(limit: number, beforeId: number): Promise<any[]> }
+type VerDO = { versions(k: string, withData?: boolean): Promise<any[]>; versionGet(id: number): Promise<{ k: string; value: any } | null>; del(k: string): Promise<void> }
+export const listVersions = (key: string, withData = false) => ((globalThis as any).__CF_DO as VerDO).versions(key, withData)
+export const getVersion = (id: number) => ((globalThis as any).__CF_DO as VerDO).versionGet(id)
+export const delKey = (key: string) => ((globalThis as any).__CF_DO as VerDO).del(key)
 export const auditAdd = async (rows: any[]) => void (await ((globalThis as any).__CF_DO as AuditDO | undefined)?.auditAdd(rows))
 export const auditList = (limit: number, beforeId = 0) => ((globalThis as any).__CF_DO as AuditDO).auditList(limit, beforeId)
 async function legacyGet<T>(key: string): Promise<T | null> {

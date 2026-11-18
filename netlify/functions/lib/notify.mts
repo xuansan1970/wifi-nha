@@ -5,7 +5,7 @@ import { envGet, getJSON, setJSON } from "./store.mts"
 export const ALERT_TO = "sanxuansan@gmail.com"
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-export async function sendMail(subject: string, text: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendMail(subject: string, text: string, attachments?: { filename: string; content: string }[]): Promise<{ ok: boolean; error?: string }> {
   const key = envGet("RESEND_API_KEY")
   if (!key) return { ok: false, error: "chưa cài RESEND_API_KEY" }
   let last = ""
@@ -14,7 +14,7 @@ export async function sendMail(subject: string, text: string): Promise<{ ok: boo
       const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: "WiFi Nhà <onboarding@resend.dev>", to: [ALERT_TO], subject, text }),
+        body: JSON.stringify({ from: "WiFi Nhà <onboarding@resend.dev>", to: [ALERT_TO], subject, text, ...(attachments ? { attachments } : {}) }),
       })
       if (r.ok) return { ok: true }
       last = `${r.status} ${(await r.text()).slice(0, 120)}`

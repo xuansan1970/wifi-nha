@@ -1,5 +1,6 @@
 import { healthStatus, pingWatchdog, saveBeat } from "./lib/health.mts"
 import { raise, sendMail } from "./lib/notify.mts"
+import { BACKUP_KEYS, CONFIG_FIELDS, restoreTest, runBackup, runDigest } from "./lib/backup.mts"
 import type { Config } from "@netlify/functions"
 import {
   cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, unghost, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
@@ -12,7 +13,7 @@ import { KIND_VI } from "./lib/smart.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
-import { auditList, cacheGet, cachePut, envGet, getJSON, isKvLimit, setJSON } from "./lib/store.mts"
+import { getVersion, listVersions, auditList, cacheGet, cachePut, envGet, getJSON, isKvLimit, setJSON } from "./lib/store.mts"
 
 const json = (data: any, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(data), {
@@ -207,7 +208,7 @@ export default async (req: Request) => {
         await addLog([{ t: Date.now(), ok: false, by: body.uid === "bame" ? "Ba Mẹ" : "Đăng nhập", role: body.uid === "bame" ? "parent" : "admin", ip, dev: (req.headers.get("user-agent") ?? "").slice(0, 120), text: `Nhập sai PIN tài khoản ${body.uid === "bame" ? "Ba Mẹ" : String(body.uid).slice(0, 20)} (IP ${ip})` }])
         return json({ error: r.error }, 401)
       }
-      if (r.user.role === "parent") await addLog([{ t: Date.now(), ok: true, by: r.user.name, role: "parent", text: `${r.user.name} đăng nhập` }])
+      await addLog([{ t: Date.now(), ok: true, by: r.user.name, role: r.user.role as any, ip, dev: (req.headers.get("user-agent") ?? "").slice(0, 120), text: `${r.user.name} đăng nhập` }])
       return json({ ok: true, me: { uid: r.user.id, name: r.user.name, role: r.user.role } }, 200, {
         "Set-Cookie": setCookie(makeToken(r.user), r.user.role),
       })
@@ -299,6 +300,23 @@ export default async (req: Request) => {
     if (path === "/log") {
       needAdmin(s)
       return json({ log: await getLog() })
+    }
+    // Phiên bản cũ của lịch/cài đặt: xem danh sách, và quay lại 1 phiên bản (bản hiện tại cũng được lưu thành phiên bản mới → quay lại được tiếp)
+    if (path === "/versions") {
+      needAdmin(s)
+      const key = String(url.searchParams.get("key") || "family")
+      if (!BACKUP_KEYS.includes(key as any)) throw new Http(400, "key không hợp lệ")
+      return json({ key, versions: await listVersions(key) })
+    }
+    if (path === "/restore" && m === "POST") {
+      needAdmin(s)
+      const v = await getVersion(Number(body.id))
+      if (!v || !BACKUP_KEYS.includes(v.k as any)) throw new Http(404, "Không có phiên bản này")
+      const fields = CONFIG_FIELDS[v.k]
+      const cur = await getJSON<any>(v.k, {})
+      await setJSON(v.k, fields ? { ...cur, ...Object.fromEntries(fields.map((f) => [f, v.value?.[f]])) } : v.value)
+      await L([{ t: Date.now(), ok: true, by: s.name, text: `Quay lại phiên bản #${body.id} của "${v.k}"` }])
+      return json({ ok: true, key: v.k })
     }
     // Nhật ký chỉ-thêm, lưu vĩnh viễn (chỉ Xuân San xem). ?format=csv để tải về, ?before=<id> để lật trang
     if (path === "/audit") {
@@ -681,7 +699,13 @@ export default async (req: Request) => {
         await saveBeat({ at: Date.now() - 30 * 60000, ok: true, ran: 0 })
         return json({ ok: true })
       }
-      throw new Http(400, "kind phải là email, alert hoặc stale")
+      if (body.kind === "backup") return json({ ok: await runBackup(Date.now(), true) })
+      if (body.kind === "restoretest") {
+        const r = await restoreTest()
+        return json(r, r.ok ? 200 : 500)
+      }
+      if (body.kind === "digest") return json({ ok: await runDigest(Date.now(), true) })
+      throw new Http(400, "kind phải là email, alert, stale, backup, restoretest hoặc digest")
     }
     if (path === "/accounts") {
       needAdmin(s)
