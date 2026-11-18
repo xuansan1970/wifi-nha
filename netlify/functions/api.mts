@@ -1,3 +1,5 @@
+import { healthStatus, pingWatchdog, saveBeat } from "./lib/health.mts"
+import { raise, sendMail } from "./lib/notify.mts"
 import type { Config } from "@netlify/functions"
 import {
   cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, unghost, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
@@ -189,13 +191,14 @@ export default async (req: Request) => {
     // Chức năng xem camera đang tạm gỡ (code vẫn giữ). Bật lại: đặt biến CAM_ENABLED=1
     if (path.startsWith("/cam/") && envGet("CAM_ENABLED") !== "1") throw new Http(404, "Chức năng camera đang tạm tắt")
     // ---------- công khai ----------
-    if (path === "/health")
-      return json({
-        ok: true,
-        ruijie: !!(envGet("RUIJIE_USER") && envGet("RUIJIE_PASS")),
-        users: !!envGet("APP_USERS"),
-        secret: !!envGet("APP_SECRET"),
-      })
+    if (path === "/health") {
+      if (url.searchParams.get("by") === "watchdog") await pingWatchdog()
+      const h = await healthStatus()
+      return json(
+        { ...h, ruijie: !!(envGet("RUIJIE_USER") && envGet("RUIJIE_PASS")), users: !!envGet("APP_USERS"), secret: !!envGet("APP_SECRET") },
+        h.ok ? 200 : 503,
+      )
+    }
     if (path === "/users" && m === "GET") return json({ users: await publicUsers() })
     if (path === "/login" && m === "POST") {
       const ip = req.headers.get("cf-connecting-ip") ?? "?"
@@ -648,6 +651,23 @@ export default async (req: Request) => {
       await setPin(String(body.uid), String(body.pin))
       await L([{ t: Date.now(), ok: true, by: s.name, text: `Đổi mã PIN tài khoản ${body.uid}` }])
       return json({ ok: true })
+    }
+    // Tự kiểm tra hệ thống cảnh báo (chỉ Quản trị): email thử / cảnh báo thử / làm "nhịp tim" cũ để thử watchdog
+    if (path === "/selftest" && m === "POST") {
+      needAdmin(s)
+      if (body.kind === "email") {
+        const r = await sendMail("[WiFi Nhà] Email thử", `Email thử từ app WiFi Nhà, gửi bởi ${s.name}.`)
+        return json(r, r.ok ? 200 : 502)
+      }
+      if (body.kind === "alert") {
+        await raise("selftest", "Cảnh báo thử", "Đây là cảnh báo thử do Quản trị bấm. Khoảng 15 phút sau sẽ có email 'Đã phục hồi'.", 0)
+        return json({ ok: true })
+      }
+      if (body.kind === "stale") {
+        await saveBeat({ at: Date.now() - 30 * 60000, ok: true, ran: 0 })
+        return json({ ok: true })
+      }
+      throw new Http(400, "kind phải là email, alert hoặc stale")
     }
     if (path === "/accounts") {
       needAdmin(s)

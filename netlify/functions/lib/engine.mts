@@ -1,3 +1,4 @@
+import { raise } from "./notify.mts"
 import * as R from "./ruijie.mts"
 import { buildSnapshot, patchSnapshot } from "./snapshot.mts"
 import { ensureOui } from "./smart.mts"
@@ -39,6 +40,22 @@ function dueAt(rules: Rule[], ms: number): Action[] {
 
 const allGids = async () => (await R.listProjects()).map((p: any) => p.gid)
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+// Thử lại có giới hạn (1,5s rồi 6s) cho lệnh gửi router; hết lượt thì ném lỗi gốc
+async function retry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  let last: any
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      last = e
+      if (i < tries - 1) await sleep(1500 * (i + 1) * (i + 1))
+    }
+  }
+  throw last
+}
+const hashText = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36)
+
 export async function exec(a: Action, by: string): Promise<LogItem> {
   const t = Date.now()
   try {
@@ -47,7 +64,18 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
       return { t, ok: true, by, text: `Khởi động lại ${sns.length} router · ${a.label}` }
     }
     if (a.kind === "wifi") {
-      await Promise.all(a.targets.map((tg) => R.setSsids(tg.gid, tg.ssidIds, a.enable)))
+      await retry(() => Promise.all(a.targets.map((tg) => R.setSsids(tg.gid, tg.ssidIds, a.enable))))
+      // Đọc lại trạng thái thật trên router; lệch thì coi là lỗi (thử đọc lại 1 lần sau 4s vì router áp dụng chậm)
+      for (const tg of a.targets) {
+        for (let k = 0; k < 2; k++) {
+          await sleep(k ? 4000 : 1200)
+          const live = await R.listSsids(tg.gid).catch(() => null)
+          if (!live) break
+          const bad = live.filter((x: any) => tg.ssidIds.includes(x.id) && x.enable !== a.enable)
+          if (!bad.length) break
+          if (k) throw new Error(`router chưa áp dụng lệnh (${bad.map((x: any) => x.name).join(", ")})`)
+        }
+      }
       await patchSnapshot((sn) => {
         for (const tg of a.targets)
           for (const r of sn.routers) if (r.gid === tg.gid) for (const x of r.ssids) if (tg.ssidIds.includes(x.id)) x.enable = a.enable
@@ -60,7 +88,7 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
     const gids = await allGids()
     const key = `${a.target.kind}:${a.target.id}`
     if (a.kind === "block") {
-      await blockMacs(macs, gids)
+      await retry(() => blockMacs(macs, gids))
       await patchSnapshot((sn) => {
         for (const r of sn.routers) r.blocked = [...new Set([...r.blocked, ...macs])]
       })
@@ -70,7 +98,7 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
       })
       return { t, ok: true, by, text: `Chặn mạng ${a.label}${a.reason ? ` (${a.reason})` : ""}` }
     }
-    await unblockMacs(macs, gids)
+    await retry(() => unblockMacs(macs, gids))
     await patchSnapshot((sn) => {
       for (const r of sn.routers) r.blocked = r.blocked.filter((m: string) => !macs.includes(m))
     })
@@ -170,6 +198,8 @@ export async function tick(now = Date.now()) {
       console.warn("KV 429 skipped for state tick")
     }
   }
+  for (const l of logs.filter((x) => !x.ok))
+    await raise(`fail-${hashText(l.text)}`, "Lệnh tự động bị lỗi", `${l.by}: ${l.text}\nHệ thống đã tự thử lại nhưng router vẫn lỗi hoặc không áp dụng lệnh.`, 3 * 3600e3).catch(() => {})
   await addLog(logs)
   return { ran: logs.length }
 }
