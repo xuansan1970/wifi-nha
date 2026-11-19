@@ -1,3 +1,4 @@
+import { raise } from "./notify.mts"
 // "Mạng gia đình": điều khiển mọi WiFi dùng chung (trừ WiFi IoT/ẩn và WiFi riêng của Xuân San).
 // 3 kịch bản: "on" mở hết · "off" tắt hết · "ghost" giả lỗi (tắt + ẩn tên WiFi).
 // Có lịch hằng tuần, hẹn giờ một lần, và "cho dùng thêm" 30′/1h/2h rồi tự về đúng chế độ.
@@ -496,6 +497,19 @@ export async function tickFamily(from: number, to: number, now: number): Promise
     logs.push({ ...l, role: "system" })
   }
   return [...logs, ...(await tickLimits(await loadFamily(), from, to, now))]
+}
+
+// Đối soát (chạy mỗi 5 phút): trạng thái thật có đúng lịch không, router có online không. Lệch quá 15 phút (đã được tự sửa ở tickFamily mà vẫn lệch) → báo email.
+export async function driftCheck(now: number) {
+  const f = await loadFamily()
+  const snap = await getSnapshot(5 * 60_000)
+  for (const r of snap.routers ?? [])
+    if (r.device && !r.online) await raise(`router-off-${r.gid}`, `Router ${r.name} đang offline`, `Router "${r.name}" không phản hồi trên Ruijie cloud lúc ${vn(now).hm} (giờ VN). Lịch và lệnh cho router này sẽ không áp dụng được cho tới khi nó online lại. Kiểm tra nguồn điện và dây mạng.`, 6 * 3600e3)
+  const want = f.grant ? null : lastFlip(f.rules, now)
+  if (!want || (f.changedAt ?? 0) >= want.since || now - want.since < 15 * 60000) return
+  const cur = await currentScene(f)
+  if (cur !== want.scene)
+    await raise("drift", "WiFi đang khác lịch", `Lịch yêu cầu WiFi "${want.scene === "on" ? "mở" : want.scene === "off" ? "tắt" : "giả lỗi"}" từ ${vn(want.since).hm}, nhưng thực tế đang "${cur}" và hệ thống tự sửa chưa được (đã thử mỗi 5 phút). Mở app bấm tay hoặc xem nhật ký.`, 3 * 3600e3)
 }
 
 export async function familyView(snap?: any, now = Date.now()) {
