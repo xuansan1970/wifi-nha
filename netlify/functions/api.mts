@@ -3,7 +3,7 @@ import { raise, sendMail } from "./lib/notify.mts"
 import { BACKUP_KEYS, CONFIG_FIELDS, restoreTest, runBackup, runDigest } from "./lib/backup.mts"
 import type { Config } from "@netlify/functions"
 import {
-  cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, unghost, endGrant, familyView, ghostSet, grant, isFamilySsid, loadFamily, markManual, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
+  cleanLimit, cleanRule as cleanNetRule, cleanTimer, saveLimits, tickLimits, unghost, endGrant, familyView, ghostSet, grant, isFamilySsid, DEFAULT_RULE_ID, loadFamily, markManual, NetRule, saveRules, saveTimers, Scene, SCENES, setNet, setScene,
 } from "./lib/family.mts"
 import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
@@ -473,6 +473,7 @@ export default async (req: Request) => {
         throw new Http(400, e.message)
       }
       const prev = (await loadFamily()).rules.find((x) => x.id === r.id)
+      if (r.id === DEFAULT_RULE_ID) r.enabled = true // lịch mặc định không thể tắt, chỉ chỉnh giờ
       const exists = !!prev
       await saveRules((rules) => (exists ? rules.map((x) => (x.id === r.id ? r : x)) : [...rules, r].slice(-20)))
       await L([{ t: Date.now(), ok: true, by: s.name, text: `${exists ? "Sửa" : "Thêm"} lịch mạng “${r.name}”: tắt ${r.offAt} → mở ${r.onAt}${r.enabled ? "" : " (đang tắt lịch)"}`, before: prev ? JSON.stringify(prev) : undefined, after: JSON.stringify(r) }])
@@ -480,6 +481,7 @@ export default async (req: Request) => {
     }
     if (path.startsWith("/net/rules/") && m === "DELETE") {
       const id = path.slice("/net/rules/".length)
+      if (id === DEFAULT_RULE_ID) throw new Http(400, "Lịch mặc định không xoá được, chỉ chỉnh giờ")
       const r = (await loadFamily()).rules.find((x) => x.id === id)
       await saveRules((rules) => rules.filter((x) => x.id !== id))
       if (r) await L([{ t: Date.now(), ok: true, by: s.name, text: `Xoá lịch mạng “${r.name}”`, before: JSON.stringify(r) }])

@@ -114,3 +114,13 @@ test("hai lịch chồng nhau: lịch đầu tiên đang trong khung thì quyế
   assert.equal(lastFlip([a, b], vnMs(MON, "21:30"))!.scene, "ghost")
   assert.equal(lastFlip([a, b], vnMs(MON, "22:30"))!.scene, "off")
 })
+
+import { defaultRule } from "../netlify/functions/lib/family.mts"
+test("lịch mặc định: mở 06:30, tắt 22:00 mọi ngày, luôn bật; sáng 09:07 lịch yêu cầu MỞ kể từ 06:30", () => {
+  const d = defaultRule()
+  assert.equal(d.enabled, true)
+  const w = lastFlip([d], vnMs(TUE, "09:07"))!
+  assert.equal(w.scene, "on")
+  assert.equal(w.since, vnMs(TUE, "06:30"))
+  assert.equal(lastFlip([d], vnMs(TUE, "23:00"))!.scene, "off")
+})

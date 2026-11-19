@@ -405,6 +405,17 @@ export async function tickLimits(f: Family, from: number, to: number, now: numbe
   return logs
 }
 
+// Lịch MẶC ĐỊNH luôn tồn tại và luôn bật: bấm tay chỉ có tác dụng tạm tới lần đổi lịch kế tiếp, không bao giờ làm mất lịch tự động
+export const DEFAULT_RULE_ID = "mac-dinh"
+export const defaultRule = (): NetRule => ({ id: DEFAULT_RULE_ID, name: "Mặc định hằng ngày", days: [0, 1, 2, 3, 4, 5, 6], offAt: "22:00", onAt: "06:30", enabled: true, mode: "off" })
+// Trả true nếu đã phải tạo/bật lại lịch mặc định (không có lịch nào đang bật)
+export async function ensureDefaultRule(): Promise<boolean> {
+  const f = await loadFamily()
+  if (f.rules.some((r) => r.enabled)) return false
+  const old = f.rules.find((r) => r.id === DEFAULT_RULE_ID)
+  await saveRules((rs) => (old ? rs.map((r) => (r.id === DEFAULT_RULE_ID ? { ...r, enabled: true } : r)) : [...rs, defaultRule()].slice(-20)))
+  return true
+}
 export async function saveRules(fn: (rules: NetRule[]) => NetRule[]) {
   const f = await loadFamily()
   f.rules = fn(f.rules)
@@ -442,6 +453,8 @@ export async function saveTimers(fn: (t: Timer[]) => Timer[]) {
 // Gọi mỗi lần cron: hẹn giờ một lần → hết giờ dùng thêm → lịch hằng tuần
 export async function tickFamily(from: number, to: number, now: number): Promise<LogItem[]> {
   const logs: LogItem[] = []
+  if (await ensureDefaultRule().catch(() => false))
+    logs.push({ t: now, ok: true, by: "Hệ thống", role: "system", text: "Không có lịch tự động nào đang bật → bật lại lịch mặc định (tắt 22:00, mở 06:30)" })
   let f = await loadFamily()
   const due = f.timers.filter((t) => t.at <= now)
   if (due.length) {
