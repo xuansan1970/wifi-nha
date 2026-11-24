@@ -4,7 +4,7 @@ import { loadBeat, saveBeat, selfChecks } from "./lib/health.mts"
 import { runBackup, runDigest } from "./lib/backup.mts"
 import { raise } from "./lib/notify.mts"
 import { driftCheck } from "./lib/family.mts"
-import { applyApps } from "./lib/appblock.mts"
+import { applyApps, configured } from "./lib/appblock.mts"
 import { auditDue, auditOnce } from "./lib/audit.mts"
 import { blockWatch } from "./lib/blockwatch.mts"
 
@@ -26,7 +26,11 @@ export default async () => {
   }
   await runBackup(now).catch((e) => console.error("backup", e))
   await runDigest(now).catch((e) => console.error("digest", e))
-  await applyApps(now).catch((e) => console.error("appblock", e))
+  // Chặn game: bộ lọc không còn nhận ra mạng nhà (IP nhà đổi) hoặc không ghi được lên NextDNS thì phải báo, vì lúc đó KHÔNG chặn được gì
+  const ap = await applyApps(now).catch((e) => void console.error("appblock", e))
+  if (ap && configured() && ap.ip && ap.linked !== ap.ip)
+    await raise("appblock-ip", "Chặn game đang không hoạt động: IP nhà đã đổi", `Bộ lọc chỉ nhận ra nhà mình theo IP. IP nhà hiện là ${ap.ip}, bộ lọc đang giữ ${ap.linked || "(trống)"}. Mở app WiFi Nhà bằng WiFi nhà một lần để app tự cập nhật.`, 3 * 3600e3).catch(() => {})
+  if (ap?.err) await raise("appblock-err", "Chặn game: chưa áp dụng được thay đổi", `Lỗi khi ghi lên bộ lọc: ${ap.err}`, 3 * 3600e3).catch(() => {})
   await driftCheck(now).catch((e) => console.error("drift", e))
   await blockWatch(now).catch((e) => console.error("blockwatch", e))
   await selfChecks(now, prev).catch((e) => console.error("selfChecks", e))
