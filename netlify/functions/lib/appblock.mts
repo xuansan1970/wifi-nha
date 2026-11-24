@@ -185,6 +185,9 @@ export async function toggleApp(id: string, on: boolean) {
 }
 // 2 nút ở thẻ chặn game: "Chặn toàn bộ" = bật MỌI công tắc trong thẻ (các mục game + đường lách); "Gỡ toàn bộ" = tắt hết các công tắc đó.
 // Giờ chặn (nếu đang bật) không bị đụng tới.
+// YouTube và Netflix KHÔNG BAO GIỜ bị 2 nút này đụng tới (anh San chốt 24/11: chặn 2 mục này làm TV phòng khách không xem được).
+// Muốn chặn YouTube/Netflix thì gạt tay từng mục trong "Chặn thêm".
+export const TV_KEEP = ["youtube", "netflix"]
 export async function setAllGames(on: boolean) {
   const st = await loadApps()
   for (const i of ITEMS) if (i.group === "game") st.on[i.id] = !!on

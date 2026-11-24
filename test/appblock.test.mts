@@ -61,11 +61,12 @@ test("2 nút: Chặn toàn bộ gạt mọi mục game (đường lách chặn t
   const { setAllGames, loadApps } = await import("../netlify/functions/lib/appblock.mts")
   const mem = new Map<string, any>()
   ;(globalThis as any).__CF_DO = { get: async (k: string) => mem.get(k), put: async (k: string, v: any) => void mem.set(k, structuredClone(v)) }
-  mem.set("appblock", { on: { tiktok: true }, sched: { enabled: true, days: [1], from: "19:00", to: "21:00", groups: ["game"] }, custom: [], allow: [] })
+  mem.set("appblock", { on: { tiktok: true, youtube: false, netflix: true }, sched: { enabled: true, days: [1], from: "19:00", to: "21:00", groups: ["game"] }, custom: [], allow: [] })
   await setAllGames(true)
   let st = await loadApps()
   const games = ITEMS.filter((i) => i.group === "game").map((i) => i.id)
   assert.ok(games.length >= 4 && games.every((g) => st.on[g] === true))
+  assert.deepEqual([st.on.youtube, st.on.netflix], [false, true], "Chặn toàn bộ không tự bật chặn YouTube/Netflix")
   assert.equal(st.on.bypass, true, "công tắc đường lách cũng phải bật, không chỉ tự chặn ngầm")
   assert.equal(desired(st, Date.parse("2026-11-25T10:00:00+07:00")).bypass, true, "đang chặn game thì đường lách bị chặn theo")
   await setAllGames(false)
@@ -73,6 +74,7 @@ test("2 nút: Chặn toàn bộ gạt mọi mục game (đường lách chặn t
   assert.ok(games.every((g) => st.on[g] === false))
   assert.equal(st.on.bypass, false)
   assert.equal(st.on.tiktok, true, "mục nhóm khác giữ nguyên")
+  assert.deepEqual([st.on.youtube, st.on.netflix], [false, true], "YouTube/Netflix không bị 2 nút đụng tới, chỉ đổi khi gạt tay")
   assert.equal(st.sched.enabled, true, "giờ chặn giữ nguyên")
   assert.equal(desired(st, Date.parse("2026-11-25T10:00:00+07:00")).roblox, false)
   delete (globalThis as any).__CF_DO
