@@ -12,6 +12,7 @@ import { waRoutes } from "./lib/webauthn.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import { insight } from "./lib/insight.mts"
+import { APPS, appView, loadApps, saveSched, toggleApp } from "./lib/appblock.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
@@ -171,6 +172,7 @@ async function view(snapMaxAge: number, s: Session) {
     usage: usage.date === today ? usage.m : {},
     kinds: KIND_VI,
     net: await familyView(snap),
+    apps: appView(await loadApps(), Date.now(), parent),
   }
 }
 
@@ -246,7 +248,7 @@ async function handle(req: Request): Promise<Response> {
     const dev = (req.headers.get("user-agent") ?? "").slice(0, 120)
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ip, dev, ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
+    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/apps/toggle", "/apps/sched", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -693,6 +695,20 @@ async function handle(req: Request): Promise<Response> {
       return json({ ok: true })
     }
 
+    // Chặn game & chat (Liên Quân, Roblox, Discord): mọi tài khoản dùng được, đều ghi nhật ký
+    if (path === "/apps/toggle" && m === "POST") {
+      const st = await toggleApp(String(body.app), !!body.on).catch((e) => { throw new Http(400, e.message) })
+      const nm = (APPS as any)[body.app].name
+      await L([{ t: Date.now(), ok: !st.err, by: s.name, text: `${body.on ? "Bật chặn" : "Bỏ chặn"} ${nm}${st.err ? ` — lỗi: ${st.err}` : ""}` }])
+      if (st.err) throw new Http(502, st.err)
+      return json({ ok: true })
+    }
+    if (path === "/apps/sched" && m === "POST") {
+      const st = await saveSched(body).catch((e) => { throw new Http(400, e.message) })
+      await L([{ t: Date.now(), ok: !st.err, by: s.name, text: st.sched.enabled ? `Đặt giờ chặn game & chat ${st.sched.from}–${st.sched.to}` : "Tắt giờ chặn game & chat" }])
+      if (st.err) throw new Http(502, st.err)
+      return json({ ok: true })
+    }
     if (path === "/insight") {
       needAdmin(s)
       return json(await insight())

@@ -302,7 +302,7 @@ function vHome() {
   const R = S.d.routers, cl = clients();
   const on = R.filter((r) => r.online).length;
   const err = S.d.errors?.length ? `<div class="alert bad">${I.alert}<div><b>Một số dữ liệu chưa tải được</b><br>${esc(S.d.errors[0])}</div></div>` : "";
-  return header("Tổng quan") + err + netHero() + `<div class="pz-grid">${sceneKeys()}${timerCard()}</div>` + wifiHomeCard() + `
+  return header("Tổng quan") + err + netHero() + `<div class="pz-grid">${sceneKeys()}${timerCard()}</div>` + appBlockCard() + wifiHomeCard() + `
   <div class="grid g4" style="margin-bottom:16px">
     ${kpi(I.router, "Router online", `${on}/${R.length}`, on === R.length ? "Tất cả hoạt động" : "Có router mất kết nối", on === R.length ? "var(--ok)" : "var(--bad)")}
     ${kpi(I.devices, "Thiết bị online", cl.length, `${cl.filter((c) => c.kind !== "iot" && c.kind !== "camera").length} máy dùng · ${cl.filter((c) => c.kind === "iot" || c.kind === "camera").length} IoT`, "var(--pri)")}

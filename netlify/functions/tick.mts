@@ -4,6 +4,7 @@ import { loadBeat, saveBeat, selfChecks } from "./lib/health.mts"
 import { runBackup, runDigest } from "./lib/backup.mts"
 import { raise } from "./lib/notify.mts"
 import { driftCheck } from "./lib/family.mts"
+import { applyApps } from "./lib/appblock.mts"
 
 // Chạy mỗi 5 phút (UTC) — lịch tự quy đổi sang giờ Việt Nam bên trong
 export default async () => {
@@ -21,6 +22,7 @@ export default async () => {
   }
   await runBackup(now).catch((e) => console.error("backup", e))
   await runDigest(now).catch((e) => console.error("digest", e))
+  await applyApps(now).catch((e) => console.error("appblock", e))
   await driftCheck(now).catch((e) => console.error("drift", e))
   await selfChecks(now, prev).catch((e) => console.error("selfChecks", e))
 }

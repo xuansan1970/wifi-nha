@@ -65,7 +65,7 @@ function grantCard() {
 
 function vParentHome() {
   return header(`Chào ${esc(S.me.name)}`) + sceneHero() + `<div class="pz-grid">${sceneKeys()}${timerCard()}</div>`
-    + grantCard() + wifiHomeCard();
+    + grantCard() + appBlockCard() + wifiHomeCard();
 }
 
 async function runScene(k, btn) {
