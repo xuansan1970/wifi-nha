@@ -4,7 +4,7 @@
 "use strict";
 const abItems = (g) => S.d.apps.items.filter((x) => x.group === g);
 const abSchedTxt = (s) => s.enabled ? `Tự chặn ${s.from}–${s.to} · ${typeof dayTxt === "function" ? dayTxt(s.days) : s.days.map((d) => DAYS[d]).join(", ")}` : "Chưa đặt giờ chặn";
-const abRow = (x) => `<div class="row" style="cursor:default"><div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${x.active ? `<span style="color:var(--bad)">Đang chặn</span>${x.on ? "" : x.id === "bypass" ? " (tự bật khi chặn game)" : " theo giờ"}` : "Đang cho dùng"}</div></div>
+const abRow = (x) => `<div class="row wf-row" style="cursor:default"><div style="min-width:0;flex:1"><div class="nm">${esc(x.name)}</div><div class="meta">${x.active ? `<span style="color:var(--bad)">Đang chặn</span>${x.on ? "" : x.id === "bypass" ? " (tự bật khi chặn game)" : " theo giờ"}` : "Đang cho dùng"}</div></div>
   <button class="sw ${x.on ? "on" : ""}" role="switch" aria-checked="${x.on}" aria-label="Chặn ${esc(x.name)}" data-appsw="${x.id}"></button></div>`;
 const abAlerts = (a) => `${a.err ? `<div class="alert bad">${I.alert}<div>Chưa áp dụng được: ${esc(a.err)}</div></div>` : ""}${a.linkedOk ? "" : `<div class="alert">${I.alert}<div>Bộ lọc chưa nhận ra mạng nhà nên <b>chưa chặn được</b>. Mở app này bằng WiFi nhà một lần là tự nhận lại.</div></div>`}`;
 function appBlockCard() {
@@ -15,8 +15,8 @@ function appBlockCard() {
   return `<div class="card" style="margin-bottom:16px">${head}${abAlerts(a)}
     <div class="list">
       ${abItems("game").map(abRow).join("")}${abRow(a.items.find((x) => x.id === "bypass"))}
-      <div class="row" data-appsched="1" style="cursor:pointer"><div style="min-width:0"><div class="nm">Giờ chặn</div><div class="meta">${esc(abSchedTxt(a.sched))}${a.inWindow ? ' · <span style="color:var(--bad)">đang trong giờ chặn</span>' : ""}</div></div><div class="rr">${I.chev}</div></div>
-      <div class="row" data-appmore="1" style="cursor:pointer"><div style="min-width:0"><div class="nm">Chặn thêm: mạng xã hội, video, web người lớn…</div><div class="meta">${others ? `Đang chặn thêm ${others} mục` : "Chưa chặn thêm mục nào"} · tên miền tự thêm · lượt đã dùng</div></div><div class="rr">${I.chev}</div></div>
+      <div class="row wf-row" data-appsched="1" style="cursor:pointer"><div style="min-width:0;flex:1"><div class="nm">Giờ chặn</div><div class="meta">${esc(abSchedTxt(a.sched))}${a.inWindow ? ' · <span style="color:var(--bad)">đang trong giờ chặn</span>' : ""}</div></div><div class="rr">${I.chev}</div></div>
+      <div class="row wf-row" data-appmore="1" style="cursor:pointer"><div style="min-width:0;flex:1"><div class="nm">Chặn thêm: mạng xã hội, video, web người lớn…</div><div class="meta">${others ? `Đang chặn thêm ${others} mục` : "Chưa chặn thêm mục nào"} · tên miền tự thêm · lượt đã dùng</div></div><div class="rr">${I.chev}</div></div>
     </div>
     <p class="meta" style="margin-top:10px">Chặn ở đây là chặn cả nhà, kể cả máy của người lớn. Máy bật 4G thì không chặn được.</p></div>`;
 }
@@ -27,7 +27,7 @@ function appSchedSheet() {
   const tog = (arr, v) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const draw = () => {
     sheet(`<div class="sheet-h"><div class="t"><h3>Giờ chặn</h3><p>Trong giờ này các nhóm đã chọn bị chặn cho cả nhà. Hết giờ tự mở lại.</p></div></div>
-      <div class="row" style="cursor:default"><div><div class="nm">Bật giờ chặn</div></div><button class="sw ${s.enabled ? "on" : ""}" role="switch" aria-checked="${s.enabled}" aria-label="Bật giờ chặn" id="abEn"></button></div>
+      <div class="row wf-row" style="cursor:default"><div><div class="nm">Bật giờ chặn</div></div><button class="sw ${s.enabled ? "on" : ""}" role="switch" aria-checked="${s.enabled}" aria-label="Bật giờ chặn" id="abEn"></button></div>
       <div class="field two" style="margin-top:12px"><div><label class="lbl">Chặn từ</label><input class="inp" type="time" id="abF" value="${s.from}"></div><div><label class="lbl">Mở lại lúc</label><input class="inp" type="time" id="abT" value="${s.to}"></div></div>
       <label class="lbl">Ngày áp dụng</label><div class="opts" id="abD" style="margin-bottom:16px">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="opt ${s.days.includes(d) ? "on" : ""}" data-d="${d}">${DAYS[d]}</button>`).join("")}</div>
       <label class="lbl">Chặn những nhóm nào</label><div class="opts" id="abG" style="margin-bottom:16px">${G.map((g) => `<button class="opt ${s.groups.includes(g.id) ? "on" : ""}" data-g="${g.id}">${esc(g.name)}</button>`).join("")}</div>

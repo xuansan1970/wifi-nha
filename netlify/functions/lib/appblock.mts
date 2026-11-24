@@ -89,7 +89,9 @@ export const cleanDomain = (v: any) => {
 export function mergeItems(cur: any[], managed: Map<string, boolean>) {
   const keep = (cur ?? []).filter((x) => !managed.has(x.id))
   const seen = new Map((cur ?? []).map((x) => [x.id, x]))
-  return [...keep, ...[...managed].map(([id, active]) => ({ ...(seen.get(id) ?? {}), id, active }))]
+  // NextDNS chỉ nhận id, active, recreation; gửi kèm trường khác (vd website) là bị từ chối ("extraneous")
+  const pick = (x: any) => ({ id: x.id, active: !!x.active, ...(x.recreation !== undefined ? { recreation: !!x.recreation } : {}) })
+  return [...keep.map(pick), ...[...managed].map(([id, active]) => pick({ ...(seen.get(id) ?? {}), id, active }))]
 }
 export function wantMaps(want: Record<string, boolean>) {
   const svc = new Map<string, boolean>(), cat = new Map<string, boolean>(), deny = new Map<string, boolean>()

@@ -39,7 +39,7 @@ test("quy ra dịch vụ, nhóm và tên miền NextDNS", () => {
   assert.equal(deny.get("riotgames.com"), true); assert.equal(deny.get("garena.vn"), false); assert.equal(deny.has("nextdns.io"), false)
 })
 test("ghép danh sách NextDNS: giữ thuộc tính sẵn có, chỉ đổi active", () => {
-  const out = mergeItems([{ id: "other", active: true }, { id: "roblox", active: true, recreation: false }], new Map([["roblox", false], ["discord", true]]))
+  const out = mergeItems([{ id: "other", active: true, website: "https://x.y" }, { id: "roblox", active: true, recreation: false, website: "https://roblox.com" }], new Map([["roblox", false], ["discord", true]]))
   assert.deepEqual(out, [{ id: "other", active: true }, { id: "roblox", active: false, recreation: false }, { id: "discord", active: true }])
 })
 test("tên miền tự thêm được làm sạch; IP công khai", () => {

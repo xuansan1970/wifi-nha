@@ -3,6 +3,10 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-24-chan-game", date: "24/11/2026", title: "Chặn game, mạng xã hội và nội dung xấu cho cả nhà",
+    text: "Trang đầu có thẻ “Chặn game & nội dung”: gạt để chặn Liên Quân, Roblox, Discord, mọi game khác; bấm “Chặn thêm” để chặn TikTok, YouTube, web người lớn… Có thể đặt giờ chặn tự động.",
+    eg: "Đặt giờ chặn 19:00–21:00 từ thứ Hai đến thứ Sáu: tới giờ học, game tự bị chặn, 21:00 tự mở lại.",
+    how: "Chặn ở đây là chặn mọi máy dùng WiFi nhà, kể cả máy người lớn. Máy bật 4G thì không chặn được." },
   { id: "2026-11-24-hoat-dong", admin: true, date: "24/11/2026", title: "Mục “Hoạt động”: ai đã vào mạng, dùng bao nhiêu",
     text: "Xem từng tầng: máy nào đã vào mạng từ hôm qua tới giờ (kể cả máy đã rời đi), dùng bao nhiêu dữ liệu, sóng tốt hay yếu, WiFi nào tải nặng, kênh có nghẽn không.",
     eg: "Thấy một máy lạ dùng 3 GB ở Tầng 1 dù giờ đã offline: bấm vào để đặt tên, gán chủ hoặc chặn." },
