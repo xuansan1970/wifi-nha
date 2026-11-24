@@ -150,9 +150,7 @@ const STEPS: (() => Promise<void>)[] = [
     await addLog([{ t: Date.now(), ok: true, by: "Kiểm toán", role: "system", text: "Bỏ chặn YouTube và Netflix (TV phòng khách không xem được)" }])
     for (const k of ["exp-poll2", "exp-audit-mac2"]) console.log("EXPFINAL", k, JSON.stringify(await getJSON<any>(k, null)).slice(0, 3500)); console.log("EXP END2", t8()) },
   // ---- Vòng 3: thử cơ chế "bám đuôi" trên MacBook (đang dùng địa chỉ 864c… sau lần nhảy WiFi ở vòng 1) ----
-  async () => expBlock(MAC2, true),
-  async () => { await expAudit("mac3"); await expBlock(MAC2, false) },
-  async () => { console.log("EXPFINAL", "mac3", JSON.stringify(await getJSON<any>("exp-audit-mac3", null)).slice(0, 3500)); console.log("EXP END3", t8()) },
+  // (đã huỷ 20:24 theo tình hình thực tế: chưa thử bám đuôi trên máy thật)
 ]
 export async function expStep(): Promise<boolean> {
   const st = await getJSON<{ id: string; stage: number }>("exp", { id: "", stage: 0 })

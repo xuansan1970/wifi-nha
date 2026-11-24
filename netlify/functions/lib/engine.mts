@@ -1,12 +1,12 @@
 import { raise } from "./notify.mts"
 import * as R from "./ruijie.mts"
 import { buildSnapshot, patchSnapshot } from "./snapshot.mts"
-import { ensureOui } from "./smart.mts"
+import { ensureOui, isRandomMac } from "./smart.mts"
 import { loadLan, saveLan } from "./lan.mts"
 import { tickFamily } from "./family.mts"
 import {
   addLog, blockMacs, labelOf, loadDevices, loadMeta, LogItem, macsOf, mutate, nextMidnightVN, loadState, rebootGroups,
-  isIotSsid, isPrivateSsid, Rule, siblingMacs, State, Target, unblockMacs, vn,
+  isIotSsid, isPrivateSsid, linkName, Rule, siblingMacs, State, Target, unblockMacs, vn,
 } from "./state.mts"
 import { getJSON, isKvLimit, setJSON } from "./store.mts"
 
@@ -58,10 +58,11 @@ async function retry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
 const hashText = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36)
 
 // Máy mới nối WiFi gia đình trong vài giây sau lệnh chặn = chính máy vừa bị chặn đổi địa chỉ (không tính dây, WiFi IoT, WiFi riêng của anh San)
-export function pickHoppers(before: Set<string>, after: { mac: string; wired?: boolean; ssid?: string }[], known: string[]) {
+export function pickHoppers(before: Set<string>, after: { mac: string; wired?: boolean; ssid?: string; rawName?: string; alias?: string }[], known: string[], named: Set<string> = new Set()) {
   const out = new Set<string>()
   for (const c of after)
-    if (!c.wired && !before.has(c.mac) && !known.includes(c.mac) && !isIotSsid({ name: c.ssid }) && !isPrivateSsid({ name: c.ssid })) out.add(c.mac)
+    // chỉ máy dùng địa chỉ ngẫu nhiên (iPhone/Mac/Android đổi địa chỉ theo từng WiFi) và chưa có tên riêng: TV, camera, máy đã đặt tên không bao giờ bị chặn nhầm
+    if (!c.wired && isRandomMac(c.mac) && !named.has(c.mac) && !linkName(c.rawName) && !linkName(c.alias) && !before.has(c.mac) && !known.includes(c.mac) && !isIotSsid({ name: c.ssid }) && !isPrivateSsid({ name: c.ssid })) out.add(c.mac)
   return [...out].slice(0, 3)
 }
 // Ghi nhớ các địa chỉ là cùng một máy (để lần sau chặn/mở đi cùng nhau và app hiện đúng tên máy)
@@ -135,7 +136,7 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
       for (let k = 0; k < 3; k++) {
         await sleep(7000)
         const now2 = (await Promise.all(gids.map((g: number) => R.listClients(g).catch(() => [] as any[])))).flat()
-        const hop = pickHoppers(before, now2, [...macs, ...hops])
+        const hop = pickHoppers(before, now2, [...macs, ...hops], new Set(Object.keys(meta).filter((m) => meta[m]?.custom || meta[m]?.owner)))
         if (!hop.length) break
         await blockMacs(hop, gids)
         hops.push(...hop)

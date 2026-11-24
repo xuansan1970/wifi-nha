@@ -75,9 +75,10 @@ test("canh chặn: tìm tầng chưa nhận lệnh chặn và máy bị chặn m
 
 test("bám đuôi: máy mới nối WiFi gia đình ngay sau lệnh chặn bị chặn theo; không đụng dây, IoT, WiFi riêng, máy đã có từ trước", async () => {
   const { pickHoppers } = await import("../netlify/functions/lib/engine.mts")
-  const before = new Set(["old1", "blocked1"])
-  const after = [{ mac: "old1", ssid: "Ninesouth13" }, { mac: "new1", ssid: "Gia Dinh Xuan Tung_TV" }, { mac: "new2", ssid: "Xuan Tung_iot T2" }, { mac: "new3", ssid: "OGA-528DBD" }, { mac: "new4", wired: true, ssid: "" }, { mac: "blocked1", ssid: "Ninesouth13" }]
-  assert.deepEqual(pickHoppers(before, after, ["blocked1"]), ["new1"])
+  const before = new Set(["a2old1", "a2blocked1"])
+  const after = [{ mac: "a2old1", ssid: "Ninesouth13" }, { mac: "a2new1", ssid: "Gia Dinh Xuan Tung_TV" }, { mac: "a2new2", ssid: "Xuan Tung_iot T2" }, { mac: "a2new3", ssid: "OGA-528DBD" }, { mac: "a2new4", wired: true, ssid: "" }, { mac: "a2blocked1", ssid: "Ninesouth13" },
+    { mac: "64ff0adf9e20", ssid: "Gia Dinh Xuan Tung_TV", rawName: "TV phòng khách" }, { mac: "a2new5", ssid: "Ninesouth13", rawName: "Macbook Air Jerry" }, { mac: "a2new6", ssid: "Ninesouth13" }]
+  assert.deepEqual(pickHoppers(before, after, ["a2blocked1"], new Set(["a2new6"])), ["a2new1"], "TV (địa chỉ thật), máy có tên, máy đã gán chủ không bị chặn nhầm")
 })
 
 test("chặn 1 máy = chặn mọi địa chỉ WiFi của máy đó; tên chung chung thì không gộp nhầm máy khác", async () => {
