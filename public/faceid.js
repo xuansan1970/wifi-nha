@@ -61,7 +61,7 @@ async function fidLoadList() {
   try {
     const { keys } = await api("/webauthn/list");
     if (!$("#fidList")) return;
-    el.innerHTML = keys.length ? keys.map((k) => `<div class="row" style="cursor:default"><span class="av round" style="background:var(--surface2);color:var(--ink)">${FID_IC}</span><div><div class="nm">${esc(k.label)}${k.uid !== S.me.uid ? ` · ${esc(k.owner)}` : ""}</div><div class="meta">Bật ${ago(k.at)} · ${k.last ? "dùng " + ago(k.last) : "chưa dùng"}</div></div><button class="btn sm" style="min-height:44px" data-fid="${esc(k.id)}" data-n="${esc(k.label)}">Gỡ</button></div>`).join("") : '<div class="meta">Chưa có máy nào bật.</div>';
+    el.innerHTML = keys.length ? keys.map((k) => `<div class="row" style="cursor:default"><span class="av round" style="background:var(--surface2);color:var(--text)">${FID_IC}</span><div><div class="nm">${esc(k.label)}${k.uid !== S.me.uid ? ` · ${esc(k.owner)}` : ""}</div><div class="meta">Bật ${ago(k.at)} · ${k.last ? "dùng " + ago(k.last) : "chưa dùng"}</div></div><button class="btn sm" style="min-height:44px" data-fid="${esc(k.id)}" data-n="${esc(k.label)}">Gỡ</button></div>`).join("") : '<div class="meta">Chưa có máy nào bật.</div>';
     $$("[data-fid]", el).forEach((b) => (b.onclick = async () => {
       if (!(await confirmBox("Gỡ máy này?", `"${b.dataset.n}" sẽ phải nhập PIN để vào app.`, "Gỡ", true))) return;
       act(b, async () => { await api("/webauthn/remove", { body: { id: b.dataset.fid } }); await fidLoadList(); }, "Đã gỡ").catch(() => {});

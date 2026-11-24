@@ -179,7 +179,7 @@ async function camConfig(): Promise<{ gatewayUrl?: string; at?: number }> {
   return c && (c.at ?? 0) >= (k?.at ?? 0) ? c : k || {}
 }
 
-export default async (req: Request) => {
+async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url)
   const path = url.pathname.replace(/^\/api/, "").replace(/\/+$/, "") || "/"
   const m = req.method
@@ -245,7 +245,7 @@ export default async (req: Request) => {
     const dev = (req.headers.get("user-agent") ?? "").slice(0, 120)
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ip, dev, ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
+    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -259,6 +259,15 @@ export default async (req: Request) => {
     }
 
     if (path === "/me") return json({ me: s })
+    // Bảng "Có gì mới": ghi theo từng người những mục đã bấm "Đã hiểu"
+    if (path === "/news") {
+      const k = `news-${s.uid}`
+      const cur = await getJSON<string[]>(k, [])
+      if (m !== "POST") return json({ seen: cur })
+      const ids = (Array.isArray(body.ids) ? body.ids : []).map(String).filter((x: string) => /^[\w-]{1,40}$/.test(x)).slice(0, 50)
+      await setJSON(k, [...new Set([...ids, ...cur])].slice(0, 200))
+      return json({ ok: true })
+    }
     if (path === "/notifs/seen" && m === "POST") {
       await setJSON(`seen-${s.uid}`, Date.now())
       return json({ ok: true })
@@ -727,6 +736,18 @@ export default async (req: Request) => {
     const status = e instanceof Http ? e.status : e instanceof R.RuijieError ? 502 : 500
     return json({ error: e.message || "Lỗi không xác định", code: e.code }, status)
   }
+}
+
+// Tự thoát sau 15 phút không dùng: chỉ request có người đang thao tác (app gửi x-active: 1) mới được gia hạn phiên.
+// Request app tự gọi nền (15 giây/lần) không gia hạn → để máy yên 15 phút là phiên hết, phải mở khoá lại.
+export default async (req: Request) => {
+  const res = await handle(req)
+  if (req.headers.get("x-active") !== "1" || res.status === 401 || res.headers.has("Set-Cookie")) return res
+  const s = await readSession(req).catch(() => null)
+  if (!s) return res
+  const h = new Headers(res.headers)
+  h.set("Set-Cookie", setCookie(makeToken({ id: s.uid, role: s.role }), s.role))
+  return new Response(res.body, { status: res.status, headers: h })
 }
 
 export const config: Config = { path: "/api/*" }

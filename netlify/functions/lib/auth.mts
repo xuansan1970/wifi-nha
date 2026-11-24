@@ -7,7 +7,9 @@ export type User = { id: string; name: string; role: Role; salt: string; hash: s
 export type Session = { uid: string; role: Role; name: string }
 
 const COOKIE = "wn_sess"
-const TTL: Record<Role, number> = { admin: 60 * 86400_000, parent: 30 * 86400_000 }
+// Phiên tự hết sau 15 phút không thao tác (mọi tài khoản). api.mts gia hạn lại mỗi khi người dùng còn thao tác.
+export const IDLE_MS = 15 * 60000
+const TTL: Record<Role, number> = { admin: IDLE_MS, parent: IDLE_MS }
 
 function secret() {
   const s = envGet("APP_SECRET")
@@ -84,6 +86,8 @@ export async function readSession(req: Request): Promise<Session | null> {
   const a = Buffer.from(sig)
   const b = Buffer.from(hmac(`${uid}.${role}.${exp}`))
   if (a.length !== b.length || !timingSafeEqual(a, b) || Number(exp) < Date.now()) return null
+  // Phiên kiểu cũ (sống 30–60 ngày, cấp trước khi có luật 15 phút) không còn giá trị → đăng nhập lại 1 lần
+  if (Number(exp) > Date.now() + IDLE_MS + 60000) return null
   const u = (await loadUsers()).find((x) => x.id === uid)
   if (!u || u.role !== role) return null
   return { uid, role: u.role, name: u.name }

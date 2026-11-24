@@ -62,7 +62,7 @@ const DAYS = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 const ini = (n) => String(n || "?").trim().split(/\s+/).map((w) => w[0]).slice(-2).join("").toUpperCase();
 
 /* ---------- Trạng thái ---------- */
-const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0, cam: { loading: false, gatewayUrl: "", streams: [], pcs: {}, recs: {}, muted: {}, error: null, alarmOn: false } };
+const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, log: [], inv: null, at: 0, err: null, lastHidden: 0, lastAct: Date.now(), cam: { loading: false, gatewayUrl: "", streams: [], pcs: {}, recs: {}, muted: {}, error: null, alarmOn: false } };
 // Công tắc chức năng xem camera: false = tạm gỡ (giữ nguyên code). Bật lại: đổi thành true và đặt biến CAM_ENABLED=1 ở backend
 const CAMERA_ON = false;
 const noCam = (a) => (CAMERA_ON ? a : a.filter((t) => (Array.isArray(t) ? t[0] : t) !== "cameras"));
@@ -83,7 +83,7 @@ async function api(path, opt = {}) {
   try {
     const r = await fetch("/api" + path, {
       method: opt.method || (opt.body ? "POST" : "GET"),
-      headers: opt.body ? { "Content-Type": "application/json" } : {},
+      headers: { ...(opt.body ? { "Content-Type": "application/json" } : {}), ...(Date.now() - S.lastAct < 60000 ? { "x-active": "1" } : {}) },
       body: opt.body ? JSON.stringify(opt.body) : undefined,
       credentials: "same-origin",
       signal: ctl.signal,
@@ -161,14 +161,18 @@ function startPolling() {
   clearInterval(S.poll);
   S.poll = setInterval(() => { if (!document.hidden && S.me && !$("#scrim").classList.contains("show")) load(); }, 15000);
 }
+// Tự thoát sau 15 phút không thao tác (mọi tài khoản). Server cũng tự hết phiên — xem api.mts.
+const IDLE_MS = 15 * 60000;
+const idleTooLong = () => Date.now() - S.lastAct > IDLE_MS;
+["pointerdown", "keydown", "touchstart"].forEach((ev) => document.addEventListener(ev, () => { S.lastAct = Date.now(); }, { capture: true, passive: true }));
+setInterval(() => { if (S.me && idleTooLong()) lockNow(); }, 30000);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) { S.lastHidden = Date.now(); return; }
   if (!S.me) return;
-  // Tài khoản Ba Mẹ (mọi tài khoản trừ Xuân San): rời app > 5 phút thì khoá lại, tránh các em cầm máy vào được
-  if (S.me.uid !== "san" && S.lastHidden && Date.now() - S.lastHidden > 5 * 60000) { lockNow(); return; }
+  if (idleTooLong()) { lockNow(); return; }
   if (Date.now() - S.at > 10000) load();
 });
-async function lockNow() { destroyCamPcs(); toggleWebSiren(false); const uid = S.me?.uid; try { await api("/logout", { method: "POST" }); } catch {} S.me = null; S.d = null; renderLogin(uid); }
+async function lockNow() { closeSheet(); destroyCamPcs(); toggleWebSiren(false); const uid = S.me?.uid; try { await api("/logout", { method: "POST" }); } catch {} S.me = null; S.d = null; renderLogin(uid); }
 
 /* ---------- Đăng nhập ---------- */
 async function renderLogin(pre) {
@@ -194,7 +198,7 @@ async function renderLogin(pre) {
     $$("[data-k]").forEach((b) => (b.onclick = () => key(b.dataset.k)));
     if (typeof fidBindLogin === "function") fidBindLogin((me) => done(me, me.role === "admin" ? me.uid : "bame"), draw);
   };
-  const done = (me, u) => { localStorage.setItem("wn_uid", u); S.me = me; S.tab = "home"; S._unread = null; document.removeEventListener("keydown", kb); boot(); };
+  const done = (me, u) => { localStorage.setItem("wn_uid", u); S.lastAct = Date.now(); S.me = me; S.tab = "home"; S._unread = null; document.removeEventListener("keydown", kb); boot(); };
   const key = async (k) => {
     if (k === "c") pin = ""; else if (k === "b") pin = pin.slice(0, -1); else if (pin.length < 8) pin += k;
     $$("#pb i").forEach((x, i) => x.classList.toggle("f", i < pin.length));
@@ -619,9 +623,10 @@ function download(name, text, type) { const a = document.createElement("a"); a.h
 /* ---------- Nhật ký / Cài đặt ---------- */
 async function loadLog() { try { S.log = (await api("/log")).log; } catch (e) { toast(e.message, 1); } if (S.tab === "log") render(); }
 function vSettings() {
-  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — bật/tắt mạng, hẹn giờ, cho dùng thêm, khoá máy" + (CAMERA_ON ? " & xem Camera" : "")}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${S.me.uid !== "san" ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
+  return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — bật/tắt mạng, hẹn giờ, cho dùng thêm, khoá máy" + (CAMERA_ON ? " & xem Camera" : "")}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button><p class="meta" style="margin-top:12px">App tự khoá sau 15 phút không dùng. Mở lại bằng khuôn mặt, vân tay hoặc mã PIN.</p></div>
   ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Mã PIN</h2></div><p class="meta" style="margin-bottom:12px">Nên đổi PIN khác năm sinh để các em không đoán được.</p><div id="acc" class="list"><div class="meta">Đang tải…</div></div></div>` : ""}
   ${typeof fidCard === "function" ? fidCard() : ""}
+  ${typeof newsCard === "function" ? newsCard() : ""}
   <div class="card"><div class="card-h"><h2>Cài lên màn hình chính</h2></div><p class="meta">iPhone: Safari → Chia sẻ → <b>Thêm vào MH chính</b>. Android: Chrome → ⋮ → <b>Cài đặt ứng dụng</b>. Mở như app, toàn màn hình.</p></div></div>`;
 }
 async function loadAccounts() {
@@ -1193,6 +1198,7 @@ function bind(root) {
   const l2 = $("#lo2"); if (l2) l2.onclick = lockNow;
   if ($("#acc")) loadAccounts();
   if (typeof fidBind === "function") fidBind();
+  if (typeof newsBind === "function") newsBind();
 }
 
 /* ---------- Khởi động ---------- */
@@ -1200,6 +1206,7 @@ async function boot() {
   shell(); render();
   try { await load("fast"); } catch (e) { toast(e.message, 1); }
   load(); startPolling();
+  if (typeof newsCheck === "function") newsCheck();
 }
 (async () => {
   try { const r = await api("/me"); S.me = r.me; boot(); } catch { if (!S.me) renderLogin(); }
