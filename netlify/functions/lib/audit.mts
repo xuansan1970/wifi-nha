@@ -151,6 +151,18 @@ const STEPS: (() => Promise<void>)[] = [
     for (const k of ["exp-poll2", "exp-audit-mac2"]) console.log("EXPFINAL", k, JSON.stringify(await getJSON<any>(k, null)).slice(0, 3500)); console.log("EXP END2", t8()) },
   // ---- Vòng 3: thử cơ chế "bám đuôi" trên MacBook (đang dùng địa chỉ 864c… sau lần nhảy WiFi ở vòng 1) ----
   // (đã huỷ 20:24 theo tình hình thực tế: chưa thử bám đuôi trên máy thật)
+  async () => {
+    // 20:38 đo từ mạng nhà: mọi mục chặn (game, đường lách, quảng cáo) đều đang mở. Anh San yêu cầu khôi phục như lúc trước, trừ YouTube và Netflix.
+    const { loadApps, setMany } = await import("./appblock.mts")
+    const { addLog } = await import("./state.mts")
+    const b = await loadApps()
+    console.log("EXP restore-before", t8(), JSON.stringify({ on: Object.keys(b.on).filter((k) => b.on[k]), sched: b.sched, ip: b.ip, linked: b.linked, err: b.err ?? null }))
+    const a2 = await setMany({ lienquan: true, roblox: true, discord: true, games: true, bypass: true, adblock: true, security: true, youtube: false, netflix: false })
+    await addLog([{ t: Date.now(), ok: !a2.err, by: "Kiểm toán", role: "system", text: `Khôi phục chặn game, đường lách, quảng cáo, web độc hại như trước; YouTube và Netflix để mở cho TV${a2.err ? " — lỗi: " + a2.err : ""}` }])
+    console.log("EXP restore-after", t8(), JSON.stringify({ on: Object.keys(a2.on).filter((k) => a2.on[k]), ip: a2.ip, linked: a2.linked, err: a2.err ?? null }))
+    const lg = (await (await import("./state.mts")).getLog()).filter((l) => l.t > Date.now() - 100 * 60000 && /chặn|Chặn|Gỡ|Bỏ/.test(l.text)).slice(0, 25).map((l) => `${new Date(l.t + 7 * 3600e3).toISOString().slice(11, 16)} ${l.by}: ${l.text}`)
+    console.log("EXP recent-log", JSON.stringify(lg).slice(0, 3000))
+  },
 ]
 export async function expStep(): Promise<boolean> {
   const st = await getJSON<{ id: string; stage: number }>("exp", { id: "", stage: 0 })

@@ -196,6 +196,13 @@ export async function setAllGames(on: boolean) {
   await setJSON(KEY, st)
   return applyApps()
 }
+// Đặt nhiều công tắc trong 1 lần ghi (dùng khi khôi phục trạng thái)
+export async function setMany(map: Record<string, boolean>) {
+  const st = await loadApps()
+  for (const [id, on] of Object.entries(map)) if (ITEM.has(id)) st.on[id] = !!on
+  await setJSON(KEY, st)
+  return applyApps()
+}
 export async function saveSched(b: any) {
   const days = [...new Set((Array.isArray(b?.days) ? b.days : []).map(Number).filter((d: number) => d >= 0 && d <= 6))].sort() as number[]
   const groups = (Array.isArray(b?.groups) ? b.groups : []).filter((g: any) => GROUPS.some((x) => x.id === g && x.id !== "safe")) as string[]
