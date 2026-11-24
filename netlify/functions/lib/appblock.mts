@@ -4,15 +4,22 @@
 import { envGet, getJSON, setJSON } from "./store.mts"
 import { getSnapshot } from "./snapshot.mts"
 
+import { LISTS } from "./blocklists.mts"
+
+// Nhóm chặn. Tên miền nằm trong blocklists.mts (tự sinh từ nguồn cộng đồng, xem bin/build-blocklists.py).
+// "games" = các game/nền tảng game khác (Free Fire, PUBG, Liên Minh, Genshin, Minecraft, Steam, game web…).
+// "bypass" = đường lách: VPN, 1.1.1.1/WARP, DNS mã hoá (DoH/DoT), iCloud Private Relay, Tor.
 export const APPS = {
-  lienquan: { name: "Liên Quân", domains: ["garena.vn", "garena.com", "garenanow.com", "garena.tv", "garena.live"] },
-  roblox: { name: "Roblox", domains: ["roblox.com", "rbxcdn.com", "rbx.com", "rbxtrk.com", "roblox.cn", "robloxlabs.com", "rbxinfra.com"] },
-  discord: { name: "Discord", domains: ["discord.com", "discord.gg", "discordapp.com", "discordapp.net", "discord.media", "discord.gift", "discord.gifts", "discord.new", "discord.dev", "discord.co", "discordcdn.com", "discordstatus.com", "dis.gd"] },
+  lienquan: { name: "Liên Quân", game: true },
+  roblox: { name: "Roblox", game: true },
+  discord: { name: "Discord", game: true },
+  games: { name: "Tất cả game khác", game: true, cat: /^(gaming|online games?|video games?)$/i },
+  bypass: { name: "VPN, 1.1.1.1 và đổi DNS", game: false, cat: /^(anonymizers?|vpns?|dns tunneling)$/i },
 } as const
 export type AppId = keyof typeof APPS
 export const APP_IDS = Object.keys(APPS) as AppId[]
 export type Sched = { enabled: boolean; days: number[]; from: string; to: string }
-export type AppState = { on: Record<string, boolean>; sched: Sched; applied: Record<string, boolean>; ip?: string; err?: string; at?: number }
+export type AppState = { on: Record<string, boolean>; sched: Sched; applied: Record<string, boolean>; lists?: Record<string, string>; ip?: string; err?: string; at?: number }
 
 const KEY = "appblock"
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -31,9 +38,17 @@ export function inWindow(s: Sched, now: number) {
   if (s.from < s.to) return s.days.includes(dow) && hm >= s.from && hm < s.to
   return (s.days.includes(dow) && hm >= s.from) || (s.days.includes((dow + 6) % 7) && hm < s.to)
 }
-// App nào cần chặn lúc này: đang gạt chặn tay, hoặc đang trong giờ chặn
-export const desired = (st: AppState, now: number) => Object.fromEntries(APP_IDS.map((id) => [id, !!st.on[id] || inWindow(st.sched, now)])) as Record<AppId, boolean>
-export const trafficExpr = (domains: readonly string[]) => `any(dns.domains[*] in {${domains.map((d) => `"${d}"`).join(" ")}})`
+// Nhóm nào cần chặn lúc này: đang gạt chặn tay, hoặc (với game/chat) đang trong giờ chặn.
+// Hễ đang chặn bất kỳ game nào thì tự chặn luôn đường lách (VPN, 1.1.1.1, đổi DNS).
+export function desired(st: AppState, now: number) {
+  const win = inWindow(st.sched, now)
+  const d = Object.fromEntries(APP_IDS.map((id) => [id, !!st.on[id] || (APPS[id].game && win)])) as Record<AppId, boolean>
+  d.bypass = d.bypass || APP_IDS.some((id) => APPS[id].game && d[id])
+  return d
+}
+export const chunk = <T,>(a: T[], n: number) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n))
+export const listsExpr = (ids: string[]) => ids.map((id) => `any(dns.domains[*] in $${id.replace(/-/g, "")})`).join(" or ")
+const hash = (a: string[]) => { let h = 5381; for (const s of a) for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return `${a.length}:${h}` }
 export const isPublicIp = (ip: any) => typeof ip === "string" && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && !/^(10\.|127\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.)/.test(ip)
 
 async function cf(path: string, method = "GET", body?: any): Promise<any> {
@@ -48,18 +63,48 @@ async function cf(path: string, method = "GET", body?: any): Promise<any> {
   return j.result
 }
 
+// Danh sách tên miền trên Cloudflare (tối đa 1.000 dòng/list nên chia khúc). Chỉ ghi lại khi nội dung đổi.
+async function syncLists(id: AppId, st: AppState, all: any[]): Promise<string[]> {
+  const parts = chunk(LISTS[id] ?? [], 1000)
+  const h = hash(LISTS[id] ?? [])
+  const ids: string[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const name = `wifi-nha:${id}:${i}`
+    const items = parts[i].map((value) => ({ value }))
+    const cur = all.find((x) => x.name === name)
+    if (!cur) ids.push((await cf("/lists", "POST", { name, type: "DOMAIN", description: "Do app WiFi Nhà quản lý", items })).id)
+    else {
+      if (st.lists?.[id] !== h) await cf(`/lists/${cur.id}`, "PUT", { name, description: "Do app WiFi Nhà quản lý", items })
+      ids.push(cur.id)
+    }
+  }
+  st.lists = { ...(st.lists ?? {}), [id]: h }
+  return ids
+}
+// Thêm nhóm phân loại sẵn của Cloudflare (Gaming, Anonymizer, VPN…) nếu tìm thấy theo tên; không thấy thì thôi
+function catExpr(re: RegExp | undefined, cats: any[]) {
+  if (!re) return ""
+  const content: number[] = [], security: number[] = []
+  for (const top of cats) for (const c of [top, ...(top.subcategories ?? [])]) if (re.test(c.name ?? "")) (/security/i.test(top.name ?? "") ? security : content).push(c.id)
+  return [content.length ? `any(dns.content_category[*] in {${content.join(" ")}})` : "", security.length ? `any(dns.security_category[*] in {${security.join(" ")}})` : ""].filter(Boolean).join(" or ")
+}
+
 // Đưa Cloudflare về đúng trạng thái mong muốn (luật chặn + IP nhà). Gọi khi bấm nút và mỗi lần tick.
 export async function applyApps(now = Date.now()): Promise<AppState> {
   const st = await loadApps()
   if (!configured()) return st
   const want = desired(st, now)
   try {
-    const rules: any[] = (await cf("/rules")) ?? []
+    const [rules, lists, cats]: any[][] = await Promise.all([cf("/rules"), cf("/lists"), cf("/categories").catch(() => [])])
     for (const id of APP_IDS) {
-      const base = { name: RULE(id), description: `Chặn ${APPS[id].name} (do app WiFi Nhà quản lý)`, action: "block", filters: ["dns"], traffic: trafficExpr(APPS[id].domains), identity: "", enabled: want[id] }
-      const r = rules.find((x) => x.name === base.name)
-      if (!r) await cf("/rules", "POST", base)
-      else if (r.enabled !== base.enabled || r.traffic !== base.traffic) await cf(`/rules/${r.id}`, "PUT", { ...base, precedence: r.precedence })
+      const ids = await syncLists(id, st, lists ?? [])
+      const byList = listsExpr(ids)
+      const byCat = catExpr((APPS[id] as any).cat, cats ?? [])
+      const base = { name: RULE(id), description: `Chặn ${APPS[id].name} (do app WiFi Nhà quản lý)`, action: "block", filters: ["dns"], traffic: [byList, byCat].filter(Boolean).join(" or "), identity: "", enabled: want[id] }
+      const r = (rules ?? []).find((x) => x.name === base.name)
+      const save = (b: typeof base) => (r ? cf(`/rules/${r.id}`, "PUT", { ...b, precedence: r.precedence }) : cf("/rules", "POST", b))
+      // Cloudflare từ chối phần phân loại (gói Free có thể không có) thì chỉ dùng danh sách tên miền
+      if (!r || r.enabled !== base.enabled || r.traffic !== base.traffic) await save(base).catch(() => save({ ...base, traffic: byList }))
       st.applied[id] = want[id]
     }
     const snap = await getSnapshot(10 * 60_000).catch(() => null)

@@ -8,16 +8,16 @@ function appBlockCard() {
   return `<div class="card" style="margin-bottom:16px"><div class="card-h"><span style="color:var(--pri)">${I.console || I.clock}</span><h2>Chặn game & chat</h2><div class="grow"></div><small class="hide-m">Gạt để chặn cho cả nhà</small></div>
     ${a.err ? `<div class="alert bad">${I.alert}<div>Chưa áp dụng được: ${esc(a.err)}</div></div>` : ""}
     <div class="list">
-      ${a.apps.map((x) => `<div class="row" style="cursor:default"><div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${x.active ? `<span style="color:var(--bad)">Đang chặn</span>${x.on ? "" : " theo giờ"}` : "Đang cho dùng"}${x.applied ? "" : " · đang áp dụng…"}</div></div>
+      ${a.apps.map((x) => `<div class="row" style="cursor:default"><div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${x.active ? `<span style="color:var(--bad)">Đang chặn</span>${x.on ? "" : x.id === "bypass" ? " (tự bật khi chặn game)" : " theo giờ"}` : "Đang cho dùng"}${x.applied ? "" : " · đang áp dụng…"}</div></div>
         <button class="sw ${x.on ? "on" : ""}" role="switch" aria-checked="${x.on}" aria-label="Chặn ${esc(x.name)}" data-appsw="${x.id}"></button></div>`).join("")}
-      <div class="row" data-appsched="1" style="cursor:pointer"><div style="min-width:0"><div class="nm">Giờ chặn cả 3</div><div class="meta">${esc(abSchedTxt(a.sched))}${a.inWindow ? ' · <span style="color:var(--bad)">đang trong giờ chặn</span>' : ""}</div></div><div class="rr">${I.chev}</div></div>
+      <div class="row" data-appsched="1" style="cursor:pointer"><div style="min-width:0"><div class="nm">Giờ chặn game & chat</div><div class="meta">${esc(abSchedTxt(a.sched))}${a.inWindow ? ' · <span style="color:var(--bad)">đang trong giờ chặn</span>' : ""}</div></div><div class="rr">${I.chev}</div></div>
     </div>
-    <p class="meta" style="margin-top:10px">Chỉ có tác dụng với máy dùng WiFi nhà. Máy bật 4G hoặc VPN thì không chặn được.</p></div>`;
+    <p class="meta" style="margin-top:10px">Đang chặn game nào thì VPN, 1.1.1.1 và đổi DNS cũng tự bị chặn. Chỉ có tác dụng với máy dùng WiFi nhà; máy bật 4G thì không chặn được.</p></div>`;
 }
 function appSchedSheet() {
   const s = JSON.parse(JSON.stringify(S.d.apps.sched));
   const draw = () => {
-    sheet(`<div class="sheet-h"><div class="t"><h3>Giờ chặn game & chat</h3><p>Trong giờ này Liên Quân, Roblox, Discord bị chặn. Hết giờ tự mở lại.</p></div></div>
+    sheet(`<div class="sheet-h"><div class="t"><h3>Giờ chặn game & chat</h3><p>Trong giờ này mọi game và Discord bị chặn, kèm VPN và 1.1.1.1. Hết giờ tự mở lại.</p></div></div>
       <div class="row" style="cursor:default"><div><div class="nm">Bật giờ chặn</div></div><button class="sw ${s.enabled ? "on" : ""}" role="switch" aria-checked="${s.enabled}" aria-label="Bật giờ chặn" id="abEn"></button></div>
       <div class="field two" style="margin-top:12px"><div><label class="lbl">Chặn từ</label><input class="inp" type="time" id="abF" value="${s.from}"></div><div><label class="lbl">Mở lại lúc</label><input class="inp" type="time" id="abT" value="${s.to}"></div></div>
       <label class="lbl">Ngày áp dụng</label><div class="opts" id="abD" style="margin-bottom:16px">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="opt ${s.days.includes(d) ? "on" : ""}" data-d="${d}">${DAYS[d]}</button>`).join("")}</div>
