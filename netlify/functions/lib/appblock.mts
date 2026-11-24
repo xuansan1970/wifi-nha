@@ -183,12 +183,13 @@ export async function toggleApp(id: string, on: boolean) {
   await setJSON(KEY, st)
   return applyApps()
 }
-// 2 nút ở thẻ chặn game: "Chặn toàn bộ" = gạt chặn mọi mục game (đường lách tự chặn theo); "Gỡ toàn bộ" = bỏ mọi công tắc game + đường lách.
+// 2 nút ở thẻ chặn game: "Chặn toàn bộ" = bật MỌI công tắc trong thẻ (các mục game + đường lách); "Gỡ toàn bộ" = tắt hết các công tắc đó.
 // Giờ chặn (nếu đang bật) không bị đụng tới.
 export async function setAllGames(on: boolean) {
   const st = await loadApps()
   for (const i of ITEMS) if (i.group === "game") st.on[i.id] = !!on
-  if (!on) st.on.bypass = false
+  // Công tắc "VPN, 1.1.1.1 và đổi DNS" nằm cùng thẻ nên bật/tắt theo: bấm Chặn toàn bộ thì mọi công tắc trong thẻ đều bật
+  st.on.bypass = !!on
   await setJSON(KEY, st)
   return applyApps()
 }

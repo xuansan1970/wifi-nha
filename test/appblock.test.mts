@@ -66,6 +66,7 @@ test("2 nút: Chặn toàn bộ gạt mọi mục game (đường lách chặn t
   let st = await loadApps()
   const games = ITEMS.filter((i) => i.group === "game").map((i) => i.id)
   assert.ok(games.length >= 4 && games.every((g) => st.on[g] === true))
+  assert.equal(st.on.bypass, true, "công tắc đường lách cũng phải bật, không chỉ tự chặn ngầm")
   assert.equal(desired(st, Date.parse("2026-11-25T10:00:00+07:00")).bypass, true, "đang chặn game thì đường lách bị chặn theo")
   await setAllGames(false)
   st = await loadApps()
