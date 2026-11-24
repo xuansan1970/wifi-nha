@@ -11,6 +11,7 @@ import { exec, Usage } from "./lib/engine.mts"
 import { waRoutes } from "./lib/webauthn.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
+import { insight } from "./lib/insight.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
@@ -692,6 +693,10 @@ async function handle(req: Request): Promise<Response> {
       return json({ ok: true })
     }
 
+    if (path === "/insight") {
+      needAdmin(s)
+      return json(await insight())
+    }
     if (path === "/inventory") {
       needAdmin(s)
       return json(await inventory())

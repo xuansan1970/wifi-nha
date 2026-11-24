@@ -244,6 +244,8 @@ export async function listClients(gid: number) {
     label: c.staLabel || "",
     labelName: c.staLabelName || "",
     os: c.staOs || "",
+    maker: c.manufacturer || "",
+    model: c.staModel || "",
     ip: c.ip || "",
     band: c.band || "",
     ssid: c.ssid || "",

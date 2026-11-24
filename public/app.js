@@ -66,7 +66,7 @@ const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, lo
 // Công tắc chức năng xem camera: false = tạm gỡ (giữ nguyên code). Bật lại: đổi thành true và đặt biến CAM_ENABLED=1 ở backend
 const CAMERA_ON = false;
 const noCam = (a) => (CAMERA_ON ? a : a.filter((t) => (Array.isArray(t) ? t[0] : t) !== "cameras"));
-const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["cameras", "Camera", "camera"], ["log", "Nhật ký", "log"], ["news", "Tính năng mới", "spark"], ["settings", "Cài đặt", "gear"]]);
+const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["cameras", "Camera", "camera"], ["insight", "Hoạt động", "clock"], ["log", "Nhật ký", "log"], ["news", "Tính năng mới", "spark"], ["settings", "Cài đặt", "gear"]]);
 // Mục cũ đã gộp: Gia đình → Thiết bị (Các con), Hẹn giờ → WiFi & Hẹn giờ, Dữ liệu → mở từ Nhật ký
 const TAB_ALIAS = { family: "devices", rules: "wifi" };
 const PARENT_TABS = noCam([["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["news", "Tính năng mới", "spark"], ["settings", "Tài khoản", "user"]]);
@@ -259,6 +259,7 @@ function go(t) {
   if (t === "log") loadLog();
   if (t === "news") newsOpened();
   if (t === "data" && !S.inv) loadInv();
+  if (t === "insight") loadInsight();
   if (t === "cameras") loadCameras();
 }
 function moreSheet() {
@@ -278,7 +279,7 @@ function render() {
   const pg = $("#page");
   if (!S.d) { pg.innerHTML = header("Đang tải") + `<div class="grid g3"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>`; return; }
   const V = isAdmin()
-    ? { home: vHome, devices: vDevices, cameras: vCameras, wifi: vWifiAll, data: vData, log: vLog, news: vNews, settings: vSettings }
+    ? { home: vHome, devices: vDevices, cameras: vCameras, wifi: vWifiAll, data: vData, insight: vInsight, log: vLog, news: vNews, settings: vSettings }
     : { home: vParentHome, family: vFamily, devices: vParentDevices, cameras: vCameras, news: vNews, settings: vSettings };
   const fn = V[S.tab] || V.home;
   const keepQ = document.activeElement?.id === "q" ? document.activeElement.selectionStart : null;

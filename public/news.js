@@ -3,6 +3,12 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-24-hoat-dong", admin: true, date: "24/11/2026", title: "Mục “Hoạt động”: ai đã vào mạng, dùng bao nhiêu",
+    text: "Xem từng tầng: máy nào đã vào mạng từ hôm qua tới giờ (kể cả máy đã rời đi), dùng bao nhiêu dữ liệu, sóng tốt hay yếu, WiFi nào tải nặng, kênh có nghẽn không.",
+    eg: "Thấy một máy lạ dùng 3 GB ở Tầng 1 dù giờ đã offline: bấm vào để đặt tên, gán chủ hoặc chặn." },
+  { id: "2026-11-24-an-danh", date: "24/11/2026", title: "Máy giấu tên được gọi đúng hơn",
+    text: "Máy tự giấu thông tin giờ hiện là “Thiết bị ẩn danh” thay vì luôn bị gọi là điện thoại. Máy nào router biết hãng thì hiện hãng.",
+    eg: "Một chiếc laptop giấu tên trước đây bị ghi nhầm là “Điện thoại ẩn danh”. Giờ không còn nhầm." },
   { id: "2026-11-24-muc-moi", date: "24/11/2026", title: "Có mục “Tính năng mới”",
     text: "Mọi cập nhật của app được ghi lại ở một chỗ, lời lẽ ngắn gọn, dễ hiểu.",
     eg: "Thấy số đỏ cạnh mục “Tính năng mới” nghĩa là app vừa có thứ mới. Bấm vào đọc xong là số đỏ biến mất." },

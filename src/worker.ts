@@ -97,7 +97,7 @@ export default {
     const res = await env.ASSETS.fetch(request)
     const h = new Headers(res.headers)
     h.set("Content-Security-Policy", "frame-ancestors 'self' https://nha-minh.giadinhxuan.workers.dev")
-    if (["/app.js", "/faceid.js", "/news.js", "/app.css", "/parent.js", "/parent.css", "/views.js", "/sw.js"].includes(url.pathname)) {
+    if (["/app.js", "/faceid.js", "/news.js", "/app.css", "/parent.js", "/parent.css", "/views.js", "/insight.js", "/sw.js"].includes(url.pathname)) {
       h.set("Cache-Control", "no-cache, must-revalidate")
     }
     return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h })

@@ -80,12 +80,12 @@ export function vendorOf(mac: string, oui: Record<string, string>) {
 export type Identity = { name: string; kind: Kind; kindVi: string; vendor: string; random: boolean; guess: boolean }
 
 export function identify(
-  c: { mac: string; alias?: string; rawName?: string; label?: string; os?: string; ssid?: string; band?: string },
+  c: { mac: string; alias?: string; rawName?: string; label?: string; os?: string; ssid?: string; band?: string; maker?: string; model?: string },
   custom: string | undefined,
   oui: Record<string, string>,
 ): Identity {
   const random = isRandomMac(c.mac)
-  const vendorRaw = vendorOf(c.mac, oui)
+  const vendorRaw = vendorOf(c.mac, oui) || String(c.maker || "").trim()
   let vendor = ""
   let kind: Kind = LABEL_KIND[String(c.label || "").toUpperCase()] ?? "unknown"
   for (const [re, nm, k] of VENDOR_HINT)
@@ -99,17 +99,16 @@ export function identify(
   const alias = String(c.alias || "").trim()
 
   // Suy luận loại từ hostname
-  const h = raw.toLowerCase()
+  const h = `${custom || ""} ${alias} ${raw} ${c.model || ""}`.toLowerCase()
   if (kind === "unknown" || kind === "iot") {
     if (/ezviz|ipc|cam|imou|hik/.test(h)) kind = "camera"
-    else if (/iphone|android|galaxy|redmi|oppo|vivo|pixel/.test(h)) kind = "phone"
+    else if (/iphone|android|galaxy|redmi|oppo|vivo|pixel|điện thoại/.test(h)) kind = "phone"
     else if (/ipad|tab/.test(h)) kind = "tablet"
     else if (/book|laptop|desktop|-pc|win/.test(h)) kind = "laptop"
     else if (/wash|dryer|fridge|refrig|aircon|vacuum|robo/.test(h)) kind = "iot"
     else if (/tv|bravia|tizen|webos|chromecast/.test(h)) kind = "tv"
     else if (/switch|playstation|ps[45]|xbox/.test(h)) kind = "console"
   }
-  if (kind === "unknown" && random) kind = "phone" // MAC riêng tư gần như luôn là điện thoại/máy tính bảng/laptop đời mới
   if (kind === "unknown" && /iot/i.test(c.ssid || "")) kind = "iot"
 
   const kindVi = KIND_VI[kind]
@@ -126,6 +125,7 @@ export function identify(
     return { name: raw.replace(/_/g, " ").replace(/\s+/g, " ").trim(), kind, kindVi, vendor, random, guess: false }
   }
   const tail = c.mac.slice(-4).toUpperCase()
-  if (random) return { name: `${kindVi} ẩn danh ·${tail}`, kind, kindVi, vendor, random, guess: true }
+  // MAC riêng tư: có thể là điện thoại, máy tính bảng hoặc laptop — không đoán bừa là điện thoại
+  if (random) return { name: `${kind === "unknown" ? "Thiết bị" : kindVi} ẩn danh ·${tail}`, kind, kindVi, vendor, random, guess: true }
   return { name: `${vendor ? vendor + " " : ""}${kindVi === "Chưa rõ" ? "Thiết bị" : kindVi} ·${tail}`.trim(), kind, kindVi, vendor, random, guess: true }
 }
