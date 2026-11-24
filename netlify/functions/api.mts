@@ -9,10 +9,11 @@ import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
 import { exec, Usage } from "./lib/engine.mts"
 import { waRoutes } from "./lib/webauthn.mts"
+import { blockAudit } from "./lib/audit.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import { insight } from "./lib/insight.mts"
-import { ITEMS, applyApps, appStats, appView, editDomain, loadApps, saveSched, toggleApp } from "./lib/appblock.mts"
+import { ITEMS, applyApps, appStats, appView, editDomain, loadApps, saveSched, toggleApp, setAllGames } from "./lib/appblock.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
@@ -248,7 +249,7 @@ async function handle(req: Request): Promise<Response> {
     const dev = (req.headers.get("user-agent") ?? "").slice(0, 120)
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ip, dev, ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/apps/toggle", "/apps/sched", "/apps/relinked", "/apps/domain", "/apps/stats", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
+    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/apps/toggle", "/apps/all", "/apps/sched", "/apps/relinked", "/apps/domain", "/apps/stats", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -703,6 +704,12 @@ async function handle(req: Request): Promise<Response> {
       if (st.err) throw new Http(502, st.err)
       return json({ ok: true })
     }
+    if (path === "/apps/all" && m === "POST") {
+      const st = await setAllGames(!!body.on)
+      await L([{ t: Date.now(), ok: !st.err, by: s.name, text: `${body.on ? "Chặn toàn bộ game" : "Gỡ toàn bộ chặn game"}${st.err ? ` — lỗi: ${st.err}` : ""}` }])
+      if (st.err) throw new Http(502, st.err)
+      return json({ ok: true })
+    }
     if (path === "/apps/domain" && m === "POST") {
       const r = await editDomain(String(body.list), body.domain, !!body.add).catch((e) => { throw new Http(400, e.message) })
       await L([{ t: Date.now(), ok: !r.st.err, by: s.name, text: `${body.add ? "Thêm" : "Gỡ"} ${r.domain} ${body.list === "allow" ? "trong danh sách luôn cho qua" : "trong danh sách chặn"}` }])
@@ -755,7 +762,8 @@ async function handle(req: Request): Promise<Response> {
         return json(r, r.ok ? 200 : 500)
       }
       if (body.kind === "digest") return json({ ok: await runDigest(Date.now(), true) })
-      throw new Http(400, "kind phải là email, alert, stale, backup, restoretest hoặc digest")
+      if (body.kind === "blockaudit") return json(await blockAudit())
+      throw new Http(400, "kind phải là email, alert, stale, backup, restoretest , digest hoặc blockaudit")
     }
     if (path === "/accounts") {
       needAdmin(s)

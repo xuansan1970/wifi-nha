@@ -50,6 +50,9 @@ export type Sched = { enabled: boolean; days: number[]; from: string; to: string
 export type AppState = { on: Record<string, boolean>; sched: Sched; custom: string[]; allow: string[]; imported?: boolean; boost?: boolean; sig?: string; okSig?: string; ip?: string; linked?: string; token?: string; err?: string; at?: number }
 
 const KEY = "appblock"
+// Kho ứng dụng luôn cho qua: nhóm "Online Gaming" của NextDNS chặn luôn cả App Store và Google Play (kiểm 24/11 bằng nhật ký NextDNS),
+// làm cả nhà không tải/cập nhật được app nào khi đang chặn game. Tải game về vẫn không chơi được vì máy chủ game bị chặn.
+export const STORE_ALLOW = ["apps.apple.com", "play.google.com"]
 const QUOTA = 300_000
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
 const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
@@ -102,9 +105,9 @@ export function wantMaps(want: Record<string, boolean>) {
   }
   return { svc, cat, deny }
 }
-const sigOf = (st: AppState, want: Record<string, boolean>) => ITEMS.map((i) => (want[i.id] ? 1 : 0)).join("") + "|" + Object.values(LISTS).map((l) => l.length).join(",") + "|" + st.custom.join(",") + "|" + st.allow.join(",")
+const sigOf = (st: AppState, want: Record<string, boolean>) => ITEMS.map((i) => (want[i.id] ? 1 : 0)).join("") + "|" + Object.values(LISTS).map((l) => l.length).join(",") + "|" + st.custom.join(",") + "|" + st.allow.join(",") + "|" + STORE_ALLOW.join(",")
 
-async function nx(path: string, method = "GET", body?: any): Promise<any> {
+export async function nx(path: string, method = "GET", body?: any): Promise<any> {
   const res = await fetch(`https://api.nextdns.io/profiles/${envGet("NEXTDNS_PROFILE")}${path}`, {
     method,
     headers: { "X-Api-Key": envGet("NEXTDNS_API_KEY")!, "Content-Type": "application/json" },
@@ -153,7 +156,7 @@ export async function applyApps(now = Date.now()): Promise<AppState> {
       await nx("/privacy/blocklists", "PUT", want.adblock ? [{ id: "nextdns-recommended" }] : [])
       await nx("/security", "PATCH", { threatIntelligenceFeeds: want.security, googleSafeBrowsing: want.security, cryptojacking: want.security })
       await nx("/denylist", "PUT", [...deny].map(([id, active]) => ({ id, active })))
-      await nx("/allowlist", "PUT", st.allow.map((id) => ({ id, active: true })))
+      await nx("/allowlist", "PUT", [...new Set([...STORE_ALLOW, ...st.allow])].map((id) => ({ id, active: true })))
       // Giữ câu trả lời DNS lâu hơn để đỡ tốn lượt truy vấn (gói miễn phí có trần theo tháng)
       if (!st.boost) { await nx("/settings/performance", "PATCH", { cacheBoost: true }).catch(() => {}); st.boost = true }
       st.okSig = sig
@@ -177,6 +180,15 @@ export async function toggleApp(id: string, on: boolean) {
   if (!ITEM.has(id)) throw new Error("Không có mục này")
   const st = await loadApps()
   st.on[id] = !!on
+  await setJSON(KEY, st)
+  return applyApps()
+}
+// 2 nút ở thẻ chặn game: "Chặn toàn bộ" = gạt chặn mọi mục game (đường lách tự chặn theo); "Gỡ toàn bộ" = bỏ mọi công tắc game + đường lách.
+// Giờ chặn (nếu đang bật) không bị đụng tới.
+export async function setAllGames(on: boolean) {
+  const st = await loadApps()
+  for (const i of ITEMS) if (i.group === "game") st.on[i.id] = !!on
+  if (!on) st.on.bypass = false
   await setJSON(KEY, st)
   return applyApps()
 }

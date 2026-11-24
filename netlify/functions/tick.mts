@@ -5,10 +5,14 @@ import { runBackup, runDigest } from "./lib/backup.mts"
 import { raise } from "./lib/notify.mts"
 import { driftCheck } from "./lib/family.mts"
 import { applyApps } from "./lib/appblock.mts"
+import { auditDue, auditOnce } from "./lib/audit.mts"
+import { blockWatch } from "./lib/blockwatch.mts"
 
 // Chạy mỗi 5 phút (UTC) — lịch tự quy đổi sang giờ Việt Nam bên trong
 export default async () => {
   const now = Date.now()
+  // Lượt kiểm toán (1 lần mỗi AUDIT_ID) chạy riêng 1 nhịp để đủ lượt gọi mạng; lịch bị lỡ 5 phút sẽ được bù ở nhịp sau
+  if (await auditDue().catch(() => false)) return void (await auditOnce().catch((e) => console.error("audit", e)))
   const prev = await loadBeat().catch(() => null)
   try {
     const r = await tick()
@@ -24,6 +28,7 @@ export default async () => {
   await runDigest(now).catch((e) => console.error("digest", e))
   await applyApps(now).catch((e) => console.error("appblock", e))
   await driftCheck(now).catch((e) => console.error("drift", e))
+  await blockWatch(now).catch((e) => console.error("blockwatch", e))
   await selfChecks(now, prev).catch((e) => console.error("selfChecks", e))
 }
 

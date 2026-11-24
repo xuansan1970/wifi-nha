@@ -56,3 +56,23 @@ test("danh mục: mã không trùng, nhóm hợp lệ; danh sách chặn không 
   for (const d of ["google.com", "youtube.com", "facebook.com", "zalo.me", "apple.com", "icloud.com", "microsoft.com", "cloudflare.com", "tiktok.com", "nextdns.io", "tailscale.com"]) assert.equal(all.has(d), false, d)
   for (const d of ["garena.vn", "roblox.com", "discord.com", "cloudflareclient.com", "dns.google", "riotgames.com"]) assert.equal(all.has(d), true, d)
 })
+
+test("2 nút: Chặn toàn bộ gạt mọi mục game (đường lách chặn theo); Gỡ toàn bộ bỏ hết, không đụng giờ chặn và nhóm khác", async () => {
+  const { setAllGames, loadApps } = await import("../netlify/functions/lib/appblock.mts")
+  const mem = new Map<string, any>()
+  ;(globalThis as any).__CF_DO = { get: async (k: string) => mem.get(k), put: async (k: string, v: any) => void mem.set(k, structuredClone(v)) }
+  mem.set("appblock", { on: { tiktok: true }, sched: { enabled: true, days: [1], from: "19:00", to: "21:00", groups: ["game"] }, custom: [], allow: [] })
+  await setAllGames(true)
+  let st = await loadApps()
+  const games = ITEMS.filter((i) => i.group === "game").map((i) => i.id)
+  assert.ok(games.length >= 4 && games.every((g) => st.on[g] === true))
+  assert.equal(desired(st, Date.parse("2026-11-25T10:00:00+07:00")).bypass, true, "đang chặn game thì đường lách bị chặn theo")
+  await setAllGames(false)
+  st = await loadApps()
+  assert.ok(games.every((g) => st.on[g] === false))
+  assert.equal(st.on.bypass, false)
+  assert.equal(st.on.tiktok, true, "mục nhóm khác giữ nguyên")
+  assert.equal(st.sched.enabled, true, "giờ chặn giữ nguyên")
+  assert.equal(desired(st, Date.parse("2026-11-25T10:00:00+07:00")).roblox, false)
+  delete (globalThis as any).__CF_DO
+})

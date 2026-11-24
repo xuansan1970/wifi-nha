@@ -64,12 +64,13 @@ async function verifyBlocked(macs: string[], gids: number[], want: boolean) {
     await Promise.all(
       gids.map(async (gid) => {
         const live = await R.listBlocked(gid).catch(() => null)
-        if (!live) return
+        // Không đọc được router nào thì KHÔNG coi là xong: router đó có thể chưa chặn, máy vẫn vào mạng ở tầng đó
+        if (!live) return void bad.add(gid)
         if (macs.some((m) => live.includes(R.macKey(m)) !== want)) bad.add(gid)
       }),
     )
     if (!bad.size) return
-    if (k) throw new Error(`router chưa ${want ? "chặn" : "mở chặn"} xong (router ${[...bad].join(", ")})`)
+    if (k) throw new Error(`${bad.size}/${gids.length} router chưa xác nhận ${want ? "chặn" : "mở chặn"} (mã ${[...bad].join(", ")})${want ? " — máy có thể vẫn vào mạng ở tầng đó, bấm chặn lại" : ""}`)
   }
 }
 

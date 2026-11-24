@@ -30,7 +30,10 @@ def resolve(name, skip=(), seen=None):
     return out
 
 # Liên Quân = Garena + hạ tầng Tencent/TiMi mà game dùng
-LIENQUAN_TENCENT = {"gcloudcs.com", "gcloudsdk.com", "gcloudsvcs.com", "hkgcloudcs.com", "nagcloudcs.com", "tencent-gcloud.com", "proximabeta.com", "timibase.com", "midasbuy.com"}
+LIENQUAN_TENCENT = {"gcloudcs.com", "gcloudsdk.com", "gcloudsvcs.com", "hkgcloudcs.com", "nagcloudcs.com", "tencent-gcloud.com", "proximabeta.com", "timibase.com", "midasbuy.com",
+    # 24/11 tối: nhật ký NextDNS cho thấy Liên Quân còn gọi hạ tầng Tencent dưới đây (tăng tốc mạng game, báo cáo, chống gian lận, SDK đăng nhập)
+    "mna.qq.com", "mdt.qq.com", "snowflake.qq.com", "tgpa.qq.com", "tdm.qq.com", "gcloud.qq.com", "igame.qq.com", "crashsight.qq.com", "crashsight.wetest.net", "perfsight.qq.com",
+    "anticheatexpert.com", "intlgame.com", "igamecj.com", "levelinfinite.com", "garenanow.com", "garena.vn"}
 EXTRA_GAMES = """mobilelegends.com moonton.com youngjoygame.com zingplay.com vnggames.com gamevui.vn poki.com crazygames.com y8.com friv.com
 miniclip.com kizi.com gamedistribution.com 1v1.lol krunker.io slither.io agar.io shellshock.io now.gg bluestacks.com geforcenow.com nvidiagrid.net
 haegin.kr innersloth.com freefiremobile.com levelinfinite.com pubgmobile.com igamecj.com honorofkings.com intlgame.com playtogether.game

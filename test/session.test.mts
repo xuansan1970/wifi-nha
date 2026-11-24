@@ -61,3 +61,14 @@ test("phiên kiểu cũ sống 60 ngày (cấp trước luật 15 phút) bị t�
   const old = await at(30 * 86400_000, () => cookieOf("san"))
   assert.equal((await call("/me", old)).status, 401)
 })
+
+test("canh chặn: tìm tầng chưa nhận lệnh chặn và máy bị chặn mà vẫn nối WiFi", async () => {
+  const { findLeaks } = await import("../netlify/functions/lib/blockwatch.mts")
+  const r = findLeaks([
+    { gid: 1, name: "Tret", blocked: ["aa"], clients: [{ mac: "bb" }, { mac: "aa", wired: true }] },
+    { gid: 2, name: "T1", blocked: [], clients: [{ mac: "aa", ssid: "Ninesouth13" }] },
+  ])
+  assert.deepEqual(r.missing, [{ gid: 2, router: "T1", mac: "aa" }])
+  assert.deepEqual(r.online, [{ gid: 2, router: "T1", mac: "aa", ssid: "Ninesouth13" }])
+  assert.deepEqual(findLeaks([{ gid: 1, name: "Tret", blocked: [], clients: [{ mac: "bb" }] }]), { missing: [], online: [] })
+})

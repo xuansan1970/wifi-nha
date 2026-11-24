@@ -13,6 +13,7 @@ function appBlockCard() {
   if (!a.configured) return isAdmin() ? `<div class="card" style="margin-bottom:16px">${head}<div class="alert">${I.alert}<div>Chưa kết nối bộ lọc NextDNS. Chạy <b>bin/setup-appblock.sh</b> để nhập API key, rồi trỏ DNS của router về NextDNS.</div></div></div>` : "";
   const others = a.items.filter((x) => x.group !== "game" && x.id !== "bypass" && x.active).length;
   return `<div class="card" style="margin-bottom:16px">${head}${abAlerts(a)}
+    <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn red" data-appall="1" style="flex:1;height:44px">Chặn toàn bộ</button><button class="btn" data-appall="0" style="flex:1;height:44px">Gỡ toàn bộ</button></div>
     <div class="list">
       ${abItems("game").map(abRow).join("")}${abRow(a.items.find((x) => x.id === "bypass"))}
       <div class="row wf-row" data-appsched="1" style="cursor:pointer"><div style="min-width:0;flex:1"><div class="nm">Giờ chặn</div><div class="meta">${esc(abSchedTxt(a.sched))}${a.inWindow ? ' · <span style="color:var(--bad)">đang trong giờ chặn</span>' : ""}</div></div><div class="rr">${I.chev}</div></div>
@@ -69,6 +70,11 @@ document.addEventListener("click", async (e) => {
     const x = S.d.apps.items.find((y) => y.id === sw.dataset.appsw), on = !x.on;
     if (!on && x.active && (S.d.apps.inWindow || x.id === "bypass")) toast(`${x.name} vẫn bị chặn ${x.id === "bypass" ? "khi còn chặn game" : "tới hết giờ chặn"}`);
     return act(null, async () => { await api("/apps/toggle", { body: { app: x.id, on } }); await load(); abRefreshSheet(); }, on ? `Đã chặn ${x.name}` : `Đã bỏ chặn ${x.name}`).catch(() => {});
+  }
+  const all = e.target.closest("[data-appall]");
+  if (all) {
+    const on = all.dataset.appall === "1";
+    return act(all, async () => { await api("/apps/all", { body: { on } }); await load(); }, on ? "Đã chặn toàn bộ game" : S.d.apps.inWindow ? "Đã gỡ công tắc, nhưng đang trong giờ chặn nên game vẫn bị chặn tới hết giờ" : "Đã gỡ toàn bộ chặn game").catch(() => {});
   }
   if (e.target.closest("[data-appsched]")) return appSchedSheet();
   if (e.target.closest("[data-appmore]")) { appMoreSheet(); return abLoadStats(); }

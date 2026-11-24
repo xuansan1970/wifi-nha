@@ -3,6 +3,13 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-24-chan-het", date: "24/11/2026", title: "Hai nút: “Chặn toàn bộ” và “Gỡ toàn bộ” game",
+    text: "Thẻ “Chặn game & nội dung” ở trang đầu có thêm 2 nút to. Bấm 1 lần là chặn hết game (Liên Quân, Roblox, Discord, mọi game khác) hoặc mở lại hết.",
+    eg: "Tới giờ cơm, Ba bấm “Chặn toàn bộ”. Ăn xong bấm “Gỡ toàn bộ” là các em chơi lại được.",
+    how: "Chặn game có tác dụng với máy dùng WiFi nhà theo cách bình thường. Máy bật 4G hoặc cài VPN thì chưa chặn được." },
+  { id: "2026-11-24-canh-chan", date: "24/11/2026", title: "Chặn mạng một máy: app tự kiểm tra lại",
+    text: "Sau khi chặn một máy, app kiểm tra đủ cả 3 tầng. Tầng nào chưa nhận lệnh thì app tự chặn bù. Máy đã chặn mà vẫn vào được mạng quá 5 phút thì app báo cho Xuân San.",
+    eg: "Chặn máy của em ở tầng trệt nhưng tầng 1 bị rớt lệnh: 5 phút sau app tự chặn nốt ở tầng 1." },
   { id: "2026-11-24-chan-game", date: "24/11/2026", title: "Chặn game, mạng xã hội và nội dung xấu cho cả nhà",
     text: "Trang đầu có thẻ “Chặn game & nội dung”: gạt để chặn Liên Quân, Roblox, Discord, mọi game khác; bấm “Chặn thêm” để chặn TikTok, YouTube, web người lớn… Có thể đặt giờ chặn tự động.",
     eg: "Đặt giờ chặn 19:00–21:00 từ thứ Hai đến thứ Sáu: tới giờ học, game tự bị chặn, 21:00 tự mở lại.",
