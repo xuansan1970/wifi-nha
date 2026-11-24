@@ -217,6 +217,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .keypad button{height:58px;border-radius:16px;background:var(--surface2);font-size:22px;font-weight:600;transition:background .1s,transform .1s}
 .keypad button:active{background:#e3e8f1;transform:scale(.95)}
 .keypad .k-ghost{background:transparent;font-size:14px;color:var(--mut)}
+.login .fid-btn{margin-top:14px;height:48px;gap:8px;font-weight:600}
 .login .err{color:var(--bad);font-size:13px;min-height:20px;font-weight:500}
 
 /* Giao diện Ba Mẹ: chữ to hơn, nút to hơn */

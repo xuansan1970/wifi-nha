@@ -90,7 +90,7 @@ async function api(path, opt = {}) {
     });
     let j = {};
     try { j = await r.json(); } catch {}
-    if (r.status === 401 && !path.startsWith("/login") && path !== "/me") { S.me = null; renderLogin(); throw new Error("Phiên đăng nhập đã hết"); }
+    if (r.status === 401 && !path.startsWith("/login") && !path.startsWith("/webauthn/login") && path !== "/me") { S.me = null; renderLogin(); throw new Error("Phiên đăng nhập đã hết"); }
     if (!r.ok) throw new Error(j.error || "Lỗi " + r.status);
     return j;
   } catch (e) {
@@ -188,17 +188,20 @@ async function renderLogin(pre) {
       <div class="pinbox" id="pb">${[0, 1, 2, 3].map((i) => `<i class="${i < pin.length ? "f" : ""}"></i>`).join("")}</div>
       <div class="err" id="le"></div>
       <div class="keypad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button data-k="${n}">${n}</button>`).join("")}<button class="k-ghost" data-k="c">Xoá</button><button data-k="0">0</button><button class="k-ghost" data-k="b">⌫</button></div>
+      ${typeof fidLoginBtn === "function" ? fidLoginBtn() : ""}
     </div></div>`;
     $$("[data-u]").forEach((b) => (b.onclick = () => { uid = b.dataset.u; pin = ""; draw(); }));
     $$("[data-k]").forEach((b) => (b.onclick = () => key(b.dataset.k)));
+    if (typeof fidBindLogin === "function") fidBindLogin((me) => done(me, me.role === "admin" ? me.uid : "bame"), draw);
   };
+  const done = (me, u) => { localStorage.setItem("wn_uid", u); S.me = me; S.tab = "home"; S._unread = null; document.removeEventListener("keydown", kb); boot(); };
   const key = async (k) => {
     if (k === "c") pin = ""; else if (k === "b") pin = pin.slice(0, -1); else if (pin.length < 8) pin += k;
     $$("#pb i").forEach((x, i) => x.classList.toggle("f", i < pin.length));
     if (pin.length === 4) {
       try {
         const r = await api("/login", { body: { uid, pin } });
-        localStorage.setItem("wn_uid", uid); S.me = r.me; S.tab = "home"; S._unread = null; document.removeEventListener("keydown", kb); boot();
+        done(r.me, uid);
       } catch (e) { $("#le").textContent = e.message; const pb = $("#pb"); pb.classList.remove("shake"); void pb.offsetWidth; pb.classList.add("shake"); pin = ""; setTimeout(() => $$("#pb i").forEach((x) => x.classList.remove("f")), 300); }
     }
   };
@@ -618,6 +621,7 @@ async function loadLog() { try { S.log = (await api("/log")).log; } catch (e) { 
 function vSettings() {
   return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — bật/tắt mạng, hẹn giờ, cho dùng thêm, khoá máy" + (CAMERA_ON ? " & xem Camera" : "")}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button>${S.me.uid !== "san" ? '<p class="meta" style="margin-top:12px">App tự khoá khi rời đi quá 5 phút để các em không mở được.</p>' : ""}</div>
   ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Mã PIN</h2></div><p class="meta" style="margin-bottom:12px">Nên đổi PIN khác năm sinh để các em không đoán được.</p><div id="acc" class="list"><div class="meta">Đang tải…</div></div></div>` : ""}
+  ${typeof fidCard === "function" ? fidCard() : ""}
   <div class="card"><div class="card-h"><h2>Cài lên màn hình chính</h2></div><p class="meta">iPhone: Safari → Chia sẻ → <b>Thêm vào MH chính</b>. Android: Chrome → ⋮ → <b>Cài đặt ứng dụng</b>. Mở như app, toàn màn hình.</p></div></div>`;
 }
 async function loadAccounts() {
@@ -1188,6 +1192,7 @@ function bind(root) {
   // cài đặt
   const l2 = $("#lo2"); if (l2) l2.onclick = lockNow;
   if ($("#acc")) loadAccounts();
+  if (typeof fidBind === "function") fidBind();
 }
 
 /* ---------- Khởi động ---------- */

@@ -8,6 +8,7 @@ import {
 import * as R from "./lib/ruijie.mts"
 import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Session, setCookie, setPin } from "./lib/auth.mts"
 import { exec, Usage } from "./lib/engine.mts"
+import { waRoutes } from "./lib/webauthn.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import {
@@ -212,6 +213,11 @@ export default async (req: Request) => {
       return json({ ok: true, me: { uid: r.user.id, name: r.user.name, role: r.user.role } }, 200, {
         "Set-Cookie": setCookie(makeToken(r.user), r.user.role),
       })
+    }
+    // Mở khoá bằng Face ID / vân tay (passkey): tự kiểm đăng nhập bên trong — xem lib/webauthn.mts
+    if (path.startsWith("/webauthn/")) {
+      const w = await waRoutes({ path, m, body, req, url, json })
+      if (w) return w
     }
     if (path === "/logout") return json({ ok: true }, 200, { "Set-Cookie": clearCookie })
     // Máy chạy go2rtc tự báo link tunnel mới (trycloudflare đổi link mỗi lần khởi động) — xác thực bằng secret CAM_TOKEN
