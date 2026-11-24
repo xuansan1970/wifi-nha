@@ -73,6 +73,13 @@ test("canh chặn: tìm tầng chưa nhận lệnh chặn và máy bị chặn m
   assert.deepEqual(findLeaks([{ gid: 1, name: "Tret", blocked: [], clients: [{ mac: "bb" }] }]), { missing: [], online: [] })
 })
 
+test("bám đuôi: máy mới nối WiFi gia đình ngay sau lệnh chặn bị chặn theo; không đụng dây, IoT, WiFi riêng, máy đã có từ trước", async () => {
+  const { pickHoppers } = await import("../netlify/functions/lib/engine.mts")
+  const before = new Set(["old1", "blocked1"])
+  const after = [{ mac: "old1", ssid: "Ninesouth13" }, { mac: "new1", ssid: "Gia Dinh Xuan Tung_TV" }, { mac: "new2", ssid: "Xuan Tung_iot T2" }, { mac: "new3", ssid: "OGA-528DBD" }, { mac: "new4", wired: true, ssid: "" }, { mac: "blocked1", ssid: "Ninesouth13" }]
+  assert.deepEqual(pickHoppers(before, after, ["blocked1"]), ["new1"])
+})
+
 test("chặn 1 máy = chặn mọi địa chỉ WiFi của máy đó; tên chung chung thì không gộp nhầm máy khác", async () => {
   const { siblingMacs, linkName } = await import("../netlify/functions/lib/state.mts")
   const { findFollowers } = await import("../netlify/functions/lib/blockwatch.mts")
@@ -82,6 +89,8 @@ test("chặn 1 máy = chặn mọi địa chỉ WiFi của máy đó; tên chung
   assert.deepEqual(siblingMacs(["aa0000000003"], devices), ["aa0000000003"], "2 chiếc cùng tên 'iPhone' là 2 máy khác nhau")
   assert.deepEqual(siblingMacs(["aa0000000006"], devices), ["aa0000000006"])
   assert.equal(linkName("MacBook Air"), "")
+  // tên do máy quét trong nhà đọc được cũng nối được 2 địa chỉ của cùng 1 máy, dù router không biết tên
+  assert.deepEqual(siblingMacs(["aa0000000006"], devices, { aa0000000006: { name: "San’s MacBook Pro" }, aa0000000007: { name: "San’s MacBook Pro" } }).sort(), ["aa0000000006", "aa0000000007"])
   const routers = [{ gid: 1, name: "T2", blocked: ["aa0000000001"], clients: [{ mac: "aa0000000009", rawName: "MacBook Pro của San", ssid: "TV" }, { mac: "aa0000000005", rawName: "Macbook Air Jerry" }, { mac: "aa0000000001", rawName: "MacBook Pro của San" }] }]
   assert.deepEqual(findFollowers(routers, new Set(["macbook pro của san"])), [{ mac: "aa0000000009", name: "MacBook Pro của San", ssid: "TV", router: "T2" }])
 })

@@ -3,6 +3,12 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-24-chan-moi-dia-chi", date: "24/11/2026", title: "Chặn một máy là chặn hẳn, không lách được bằng cách đổi WiFi",
+    text: "Trước đây chặn một máy tính hay điện thoại, máy tự nối sang WiFi khác trong nhà và có mạng lại sau khoảng 10 giây. Giờ app chặn mọi “tên” mà máy đó dùng ở từng WiFi, và tự chặn tiếp nếu máy đổi tên mới.",
+    eg: "Chặn MacBook của em: máy không vào được Ninesouth13, cũng không vào được WiFi TV hay WiFi nào khác trong nhà cho tới khi mở chặn." },
+  { id: "2026-11-24-ten-may", date: "24/11/2026", title: "Nhận ra thêm tên và loại của nhiều máy",
+    text: "Nhiều máy trước đây chỉ hiện tên vô nghĩa như “localhost”, “wlan0” nay hiện đúng là camera, thiết bị Tuya, TV, MacBook kèm đời máy.",
+    eg: "Hai máy tên “localhost” ở tầng trệt giờ hiện là “Camera IP”." },
   { id: "2026-11-24-chan-het", date: "24/11/2026", title: "Hai nút: “Chặn toàn bộ” và “Gỡ toàn bộ” game",
     text: "Thẻ “Chặn game & nội dung” ở trang đầu có thêm 2 nút to. Bấm 1 lần là chặn hết game (Liên Quân, Roblox, Discord, mọi game khác) hoặc mở lại hết.",
     eg: "Tới giờ cơm, Ba bấm “Chặn toàn bộ”. Ăn xong bấm “Gỡ toàn bộ” là các em chơi lại được.",

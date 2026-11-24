@@ -111,10 +111,14 @@ export const linkName = (raw: any) => {
   const n = String(raw ?? "").trim().toLowerCase()
   return n.length >= 3 && !GENERIC_HOST.test(n) ? n : ""
 }
-export function siblingMacs(macs: string[], devices: Record<string, Dev>): string[] {
+// Tên để nối các địa chỉ của cùng một máy: tên máy khai với router (rawName) và tên máy quét trong nhà đọc được (lan[mac].name)
+export const namesOf = (mac: string, devices: Record<string, Dev>, lan: Record<string, { name?: string }> = {}) =>
+  [linkName(devices[mac]?.rawName), linkName(lan[mac]?.name)].filter(Boolean)
+export function siblingMacs(macs: string[], devices: Record<string, Dev>, lan: Record<string, { name?: string }> = {}): string[] {
   const out = new Set(macs.map((m) => R.macKey(m)))
-  const names = new Set([...out].map((m) => linkName(devices[m]?.rawName)).filter(Boolean))
-  if (names.size) for (const [m, d] of Object.entries(devices)) if (out.size < 12 && names.has(linkName(d.rawName))) out.add(m)
+  const names = new Set([...out].flatMap((m) => namesOf(m, devices, lan)))
+  if (names.size)
+    for (const m of new Set([...Object.keys(devices), ...Object.keys(lan)])) if (out.size < 12 && namesOf(m, devices, lan).some((n) => names.has(n))) out.add(m)
   return [...out]
 }
 export function labelOf(t: Target, s: State, devices: Record<string, Dev>, meta: Meta) {

@@ -2,10 +2,11 @@ import { raise } from "./notify.mts"
 import * as R from "./ruijie.mts"
 import { buildSnapshot, patchSnapshot } from "./snapshot.mts"
 import { ensureOui } from "./smart.mts"
+import { loadLan, saveLan } from "./lan.mts"
 import { tickFamily } from "./family.mts"
 import {
   addLog, blockMacs, labelOf, loadDevices, loadMeta, LogItem, macsOf, mutate, nextMidnightVN, loadState, rebootGroups,
-  Rule, siblingMacs, State, Target, unblockMacs, vn,
+  isIotSsid, isPrivateSsid, Rule, siblingMacs, State, Target, unblockMacs, vn,
 } from "./state.mts"
 import { getJSON, isKvLimit, setJSON } from "./store.mts"
 
@@ -55,6 +56,20 @@ async function retry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
   throw last
 }
 const hashText = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7).toString(36)
+
+// Máy mới nối WiFi gia đình trong vài giây sau lệnh chặn = chính máy vừa bị chặn đổi địa chỉ (không tính dây, WiFi IoT, WiFi riêng của anh San)
+export function pickHoppers(before: Set<string>, after: { mac: string; wired?: boolean; ssid?: string }[], known: string[]) {
+  const out = new Set<string>()
+  for (const c of after)
+    if (!c.wired && !before.has(c.mac) && !known.includes(c.mac) && !isIotSsid({ name: c.ssid }) && !isPrivateSsid({ name: c.ssid })) out.add(c.mac)
+  return [...out].slice(0, 3)
+}
+// Ghi nhớ các địa chỉ là cùng một máy (để lần sau chặn/mở đi cùng nhau và app hiện đúng tên máy)
+async function linkSame(main: string, others: string[], label: string) {
+  const lan = await loadLan()
+  const name = (lan[main]?.name || label.replace(/\s*\(.*?\)\s*$/, "") || `Máy ${main.slice(-4).toUpperCase()}`).slice(0, 60)
+  await saveLan([main, ...others].map((mac) => ({ mac, name, via: "cùng máy (nhảy WiFi khi bị chặn)" })))
+}
 
 // Đọc lại danh sách chặn thật trên từng router: lệnh chặn/mở chặn phải khớp thực tế (kiểm lần 1 sau 1s, lần 2 sau 4s)
 async function verifyBlocked(macs: string[], gids: number[], want: boolean) {
@@ -106,13 +121,30 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
     const key0 = `${a.target.kind}:${a.target.id}`
     // Chặn/mở mọi địa chỉ WiFi của cùng một máy (xem siblingMacs); khi mở thì gồm cả các địa chỉ đã chặn kèm lúc trước
     const kept = a.kind === "unblock" ? ((await loadState()).temps.find((x) => x.key === key0)?.macs ?? []) : []
-    const macs = siblingMacs([...new Set([...base, ...kept])], await loadDevices())
+    const macs = siblingMacs([...new Set([...base, ...kept])], await loadDevices(), await loadLan().catch(() => ({})))
     const more = macs.length > base.length ? ` (kèm ${macs.length - base.length} địa chỉ WiFi khác của máy)` : ""
     const gids = await allGids()
     const key = `${a.target.kind}:${a.target.id}`
     if (a.kind === "block") {
+      // Ai đang nối WiFi ngay trước khi chặn: dùng để nhận ra "máy vừa bị chặn nhảy sang WiFi khác bằng địa chỉ mới"
+      const before = new Set((await Promise.all(gids.map((g: number) => R.listClients(g).catch(() => [] as any[])))).flat().map((c: any) => c.mac))
       await retry(() => blockMacs(macs, gids))
       await verifyBlocked(macs, gids, true)
+      // Bám đuôi (thử thật 24/11: MacBook bị chặn tự nối WiFi nhà khác với địa chỉ mới sau ~10 giây): tối đa 3 lượt, mỗi lượt chờ 7 giây
+      const hops: string[] = []
+      for (let k = 0; k < 3; k++) {
+        await sleep(7000)
+        const now2 = (await Promise.all(gids.map((g: number) => R.listClients(g).catch(() => [] as any[])))).flat()
+        const hop = pickHoppers(before, now2, [...macs, ...hops])
+        if (!hop.length) break
+        await blockMacs(hop, gids)
+        hops.push(...hop)
+      }
+      if (hops.length) {
+        await linkSame(base[0], hops, a.label).catch(() => {})
+        macs.push(...hops)
+      }
+      const hopTxt = hops.length ? ` — máy nhảy sang ${hops.length} địa chỉ WiFi khác, đã chặn luôn` : ""
       await patchSnapshot((sn) => {
         for (const r of sn.routers) r.blocked = [...new Set([...r.blocked, ...macs])]
       })
@@ -120,7 +152,7 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
         s.temps = s.temps.filter((x) => x.key !== key)
         if (a.until) s.temps.push({ key, label: a.label, macs, until: a.until, reason: a.reason ?? "" })
       })
-      return { t, ok: true, by, text: `Chặn mạng ${a.label}${a.reason ? ` (${a.reason})` : ""}${more}` }
+      return { t, ok: true, by, text: `Chặn mạng ${a.label}${a.reason ? ` (${a.reason})` : ""}${more}${hopTxt}` }
     }
     await retry(() => unblockMacs(macs, gids))
     await verifyBlocked(macs, gids, false)

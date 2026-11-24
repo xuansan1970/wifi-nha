@@ -81,6 +81,7 @@ export async function auditOnce() {
 export const EXP_ID = "2026-11-24-quat-1"
 const FAN = { mac: "c493bb22273e", label: "Quạt phòng San (thử chặn thật)" }
 const MAC = { mac: "f6685c574bff", label: "MacBook Pro của San (thử chặn thật)" }
+const MAC2 = { mac: "864cb7a0f207", label: "MacBook Pro của San (thử chặn thật)" }
 const t8 = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(11, 19)
 async function expBlock(d: { mac: string; label: string }, on: boolean) {
   const { exec } = await import("./engine.mts")
@@ -92,7 +93,7 @@ async function expBlock(d: { mac: string; label: string }, on: boolean) {
 }
 async function expAudit(tag: string) {
   const o = await blockAudit("router")
-  const pack = { at: t8(), routers: o.routers.map((r: any) => ({ name: r.name, blocked: r.blocked, err: r.blErr || r.clErr, vanOnline: r.biChanMaVanOnline, co: r.clients.filter((c: string) => c.startsWith(FAN.mac) || /MacBook Pro của San/i.test(c)) })) }
+  const pack = { at: t8(), routers: o.routers.map((r: any) => ({ name: r.name, blocked: r.blocked, err: r.blErr || r.clErr, vanOnline: r.biChanMaVanOnline, co: r.clients.filter((c: string) => c.startsWith(FAN.mac) || c.startsWith(MAC2.mac) || /MacBook Pro của San/i.test(c)) })) }
   await setJSON(`exp-audit-${tag}`, pack)
   console.log("EXPAUDIT", tag, JSON.stringify(pack).slice(0, 3500))
 }
@@ -141,7 +142,17 @@ const STEPS: (() => Promise<void>)[] = [
   },
   async () => { await expBlock(FAN, false); await expBlock(MAC, true) },
   async () => { await expAudit("mac2"); await expBlock(MAC, false) },
-  async () => { for (const k of ["exp-poll2", "exp-audit-mac2"]) console.log("EXPFINAL", k, JSON.stringify(await getJSON<any>(k, null)).slice(0, 3500)); console.log("EXP END2", t8()) },
+  async () => {
+    // 20:17 anh San báo TV không xem được: YouTube và Netflix đang bị chặn cho cả nhà (bật lúc 14:46–14:47) → gỡ 2 mục này
+    const { toggleApp } = await import("./appblock.mts")
+    const { addLog } = await import("./state.mts")
+    for (const id of ["youtube", "netflix"]) { const r = await toggleApp(id, false); console.log("EXP tv-fix", id, t8(), r.err ?? "ok") }
+    await addLog([{ t: Date.now(), ok: true, by: "Kiểm toán", role: "system", text: "Bỏ chặn YouTube và Netflix (TV phòng khách không xem được)" }])
+    for (const k of ["exp-poll2", "exp-audit-mac2"]) console.log("EXPFINAL", k, JSON.stringify(await getJSON<any>(k, null)).slice(0, 3500)); console.log("EXP END2", t8()) },
+  // ---- Vòng 3: thử cơ chế "bám đuôi" trên MacBook (đang dùng địa chỉ 864c… sau lần nhảy WiFi ở vòng 1) ----
+  async () => expBlock(MAC2, true),
+  async () => { await expAudit("mac3"); await expBlock(MAC2, false) },
+  async () => { console.log("EXPFINAL", "mac3", JSON.stringify(await getJSON<any>("exp-audit-mac3", null)).slice(0, 3500)); console.log("EXP END3", t8()) },
 ]
 export async function expStep(): Promise<boolean> {
   const st = await getJSON<{ id: string; stage: number }>("exp", { id: "", stage: 0 })
