@@ -66,15 +66,17 @@ const S = { me: null, d: null, tab: "home", q: "", floor: "all", busy: false, lo
 // Công tắc chức năng xem camera: false = tạm gỡ (giữ nguyên code). Bật lại: đổi thành true và đặt biến CAM_ENABLED=1 ở backend
 const CAMERA_ON = false;
 const noCam = (a) => (CAMERA_ON ? a : a.filter((t) => (Array.isArray(t) ? t[0] : t) !== "cameras"));
-const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["cameras", "Camera", "camera"], ["log", "Nhật ký", "log"], ["settings", "Cài đặt", "gear"]]);
+const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết bị", "devices"], ["wifi", "WiFi", "wifi"], ["cameras", "Camera", "camera"], ["log", "Nhật ký", "log"], ["news", "Tính năng mới", "spark"], ["settings", "Cài đặt", "gear"]]);
 // Mục cũ đã gộp: Gia đình → Thiết bị (Các con), Hẹn giờ → WiFi & Hẹn giờ, Dữ liệu → mở từ Nhật ký
 const TAB_ALIAS = { family: "devices", rules: "wifi" };
-const PARENT_TABS = noCam([["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["settings", "Tài khoản", "user"]]);
+const PARENT_TABS = noCam([["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["news", "Tính năng mới", "spark"], ["settings", "Tài khoản", "user"]]);
 const MOBILE_ADMIN = noCam(["home", "devices", "wifi", "cameras", "more"]);
 const isAdmin = () => S.me?.role === "admin";
 // Quản lý các con / thiết bị / giờ nghỉ / giới hạn giờ: Xuân San và Ba Mẹ đều dùng được
 const canFamily = () => !!S.me;
 const tabs = () => (isAdmin() ? ADMIN_TABS : PARENT_TABS);
+// Số đỏ trên mục: Thiết bị = số máy đang chặn; Tính năng mới = số cập nhật chưa xem
+const tabBadge = (k, blockedN) => { const n = k === "devices" ? blockedN : k === "news" && typeof newsUnseen === "function" ? newsUnseen() : 0; return n ? `<span class="badge">${n}</span>` : ""; };
 
 /* ---------- API ---------- */
 async function api(path, opt = {}) {
@@ -223,7 +225,7 @@ function shell() {
   $("#root").innerHTML = `<div class="shell ${isAdmin() ? "" : "simple"}">
     <aside class="side">
       <div class="brand"><img src="/icon.svg" alt=""><div><b>WiFi Nhà</b><small>3 tầng · Ruijie</small></div></div>
-      ${T.map(([k, l, ic]) => `<button class="nav ${S.tab === k ? "on" : ""}" data-tab="${k}" data-tip="${l}">${I[ic]}<span>${l}</span>${k === "devices" && blockedN ? `<span class="badge">${blockedN}</span>` : ""}</button>`).join("")}
+      ${T.map(([k, l, ic]) => `<button class="nav ${S.tab === k ? "on" : ""}" data-tab="${k}" data-tip="${l}">${I[ic]}<span>${l}</span>${tabBadge(k, blockedN)}</button>`).join("")}
       <div class="grow"></div>
       ${isAdmin() ? `<button class="nav" id="bell" data-tip="Thông báo">${I.bell}<span>Thông báo</span>${S.d?.notif?.unread ? `<span class="badge">${S.d.notif.unread}</span>` : ""}</button>` : ""}
       <button class="nav" id="themeBtn" data-tip="Giao diện">${getTheme() === "dark" ? I.sun : I.moon}<span>${getTheme() === "dark" ? "Chế độ Sáng" : "Chế độ Tối"}</span></button>
@@ -233,7 +235,7 @@ function shell() {
       <header class="mtop" id="mtop"><img src="/icon.svg" alt=""><b id="mt">WiFi Nhà</b><button class="btn ghost icon" id="themeBtn2" aria-label="Đổi giao diện">${getTheme() === "dark" ? I.sun : I.moon}</button>${isAdmin() ? `<button class="btn ghost icon" id="bell2" aria-label="Thông báo" style="position:relative">${I.bell}${S.d?.notif?.unread ? `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px">${S.d.notif.unread}</span>` : ""}</button>` : ""}<button class="btn ghost icon" id="rf2" aria-label="Làm mới">${I.refresh}</button></header>
       <main class="main"><div class="page" id="page"></div></main>
     </div>
-    <nav class="tabbar">${mob.map(([k, l, ic]) => `<button class="${S.tab === k || (k === "more" && moreOn) ? "on" : ""}" data-tab="${k}">${I[ic]}${l}${k === "devices" && blockedN ? `<span class="badge">${blockedN}</span>` : ""}</button>`).join("")}</nav>
+    <nav class="tabbar">${mob.map(([k, l, ic]) => `<button class="${S.tab === k || (k === "more" && moreOn) ? "on" : ""}" data-tab="${k}">${I[ic]}${l}${tabBadge(k, blockedN)}</button>`).join("")}</nav>
   </div>`;
   $$("[data-tab]").forEach((b) => (b.onclick = () => go(b.dataset.tab)));
   $("#lo").onclick = lockNow;
@@ -255,6 +257,7 @@ function go(t) {
   if (S.tab === "cameras" && t !== "cameras") destroyCamPcs();
   S.tab = t; shell(); render(); scrollTo({ top: 0 });
   if (t === "log") loadLog();
+  if (t === "news") newsOpened();
   if (t === "data" && !S.inv) loadInv();
   if (t === "cameras") loadCameras();
 }
@@ -275,8 +278,8 @@ function render() {
   const pg = $("#page");
   if (!S.d) { pg.innerHTML = header("Đang tải") + `<div class="grid g3"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>`; return; }
   const V = isAdmin()
-    ? { home: vHome, devices: vDevices, cameras: vCameras, wifi: vWifiAll, data: vData, log: vLog, settings: vSettings }
-    : { home: vParentHome, family: vFamily, devices: vParentDevices, cameras: vCameras, settings: vSettings };
+    ? { home: vHome, devices: vDevices, cameras: vCameras, wifi: vWifiAll, data: vData, log: vLog, news: vNews, settings: vSettings }
+    : { home: vParentHome, family: vFamily, devices: vParentDevices, cameras: vCameras, news: vNews, settings: vSettings };
   const fn = V[S.tab] || V.home;
   const keepQ = document.activeElement?.id === "q" ? document.activeElement.selectionStart : null;
   pg.innerHTML = fn();
@@ -626,7 +629,6 @@ function vSettings() {
   return header(isAdmin() ? "Cài đặt" : "Tài khoản") + `<div class="grid g2"><div class="card"><div class="card-h"><h2>Tài khoản đang dùng</h2></div><div class="row" style="cursor:default"><span class="av round" style="background:var(--pri)">${esc(ini(S.me.name))}</span><div><div class="nm">${esc(S.me.name)}</div><div class="meta">${isAdmin() ? "Quản trị — toàn quyền" : "Ba Mẹ — bật/tắt mạng, hẹn giờ, cho dùng thêm, khoá máy" + (CAMERA_ON ? " & xem Camera" : "")}</div></div><span></span></div><button class="btn red block" id="lo2" style="margin-top:12px">${I.out}Đăng xuất</button><p class="meta" style="margin-top:12px">App tự khoá sau 15 phút không dùng. Mở lại bằng khuôn mặt, vân tay hoặc mã PIN.</p></div>
   ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Mã PIN</h2></div><p class="meta" style="margin-bottom:12px">Nên đổi PIN khác năm sinh để các em không đoán được.</p><div id="acc" class="list"><div class="meta">Đang tải…</div></div></div>` : ""}
   ${typeof fidCard === "function" ? fidCard() : ""}
-  ${typeof newsCard === "function" ? newsCard() : ""}
   <div class="card"><div class="card-h"><h2>Cài lên màn hình chính</h2></div><p class="meta">iPhone: Safari → Chia sẻ → <b>Thêm vào MH chính</b>. Android: Chrome → ⋮ → <b>Cài đặt ứng dụng</b>. Mở như app, toàn màn hình.</p></div></div>`;
 }
 async function loadAccounts() {
@@ -1198,7 +1200,6 @@ function bind(root) {
   const l2 = $("#lo2"); if (l2) l2.onclick = lockNow;
   if ($("#acc")) loadAccounts();
   if (typeof fidBind === "function") fidBind();
-  if (typeof newsBind === "function") newsBind();
 }
 
 /* ---------- Khởi động ---------- */
