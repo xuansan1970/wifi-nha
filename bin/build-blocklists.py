@@ -39,7 +39,7 @@ EXTRA_BYPASS = """cloudflareclient.com cloudflarewarp.com one.one.one.one mask.i
 protonvpn.com protonvpn.net protonvpn.ch expressvpn.com surfshark.com cyberghostvpn.com privateinternetaccess.com windscribe.com tunnelbear.com
 hotspotshield.com hsselite.com hola.org holavpn.com turbovpn.com x-vpn.com urban-vpn.com vpnbook.com hide.me ipvanish.com purevpn.com atlasvpn.com
 mullvad.net ivpn.net betternet.co vpnify.com ultrasurf.us browsec.com zenmate.com touchvpn.net getlantern.org psiphon.ca psiphon3.com
-torproject.org openvpn.net wireguard.com softether.org vpngate.net tailscale.com zerotier.com""".split()
+torproject.org openvpn.net wireguard.com softether.org vpngate.net""".split()
 # Không chặn: trang tin/quyền riêng tư bị gom chung trong nguồn "anticensorship"
 BYPASS_KEEP = {"nextdns.io", "eff.org", "jitsi.org", "wikileaks.org", "privacytools.io", "browserleaks.com", "ooni.org", "turkeyblocks.org", "censorship.ai", "gfw.report", "democracy.earth", "akasha.world", "dat.foundation", "guardianproject.info", "ahmia.fi"}
 
