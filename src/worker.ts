@@ -79,7 +79,10 @@ export class StoreDO extends DurableObject {
 }
 
 function initEnv(env: Env) {
-  ;(globalThis as any).__CF_DO = env.STORE.get(env.STORE.idFromName("main"))
+  // Mỗi lần dùng lấy 1 stub mới trong đúng request đang chạy. Trước đây cất sẵn 1 stub vào biến chung:
+  // 2 request chạy chồng nhau thì request sau ghi đè stub của request trước → Workers báo
+  // "Cannot perform I/O on behalf of a different request" (lỗi 500 ngẫu nhiên khi app gọi nhiều API cùng lúc).
+  Object.defineProperty(globalThis, "__CF_DO", { configurable: true, get: () => env.STORE.get(env.STORE.idFromName("main")) })
   ;(globalThis as any).__CF_KV = env.KV
   ;(globalThis as any).__CF_ENV = env
 }
