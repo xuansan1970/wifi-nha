@@ -1,6 +1,6 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { chunk, desired, inWindow, isPublicIp, listsExpr, type AppState } from "../netlify/functions/lib/appblock.mts"
+import { denyMap, desired, inWindow, isPublicIp, mergeItems, type AppState } from "../netlify/functions/lib/appblock.mts"
 
 const vnMs = (date: string, hm: string) => Date.parse(`${date}T${hm}:00+07:00`)
 const MON = "2026-11-16", TUE = "2026-11-17"
@@ -29,9 +29,17 @@ test("chặn tay luôn có hiệu lực; đang chặn game thì tự chặn đư
 test("trong giờ chặn: chặn hết game, chat và đường lách", () => {
   assert.deepEqual(desired(st(), vnMs(MON, "20:00")), { lienquan: true, roblox: true, discord: true, games: true, bypass: true })
 })
-test("biểu thức luật Cloudflare, chia khúc 1.000 dòng, lọc IP công khai", () => {
-  assert.equal(listsExpr(["ab-12", "cd-34"]), "any(dns.domains[*] in $ab12) or any(dns.domains[*] in $cd34)")
-  assert.deepEqual(chunk([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]])
+test("ghép danh sách NextDNS: giữ mục anh San tự thêm, chỉ đổi mục app quản lý", () => {
+  const cur = [{ id: "instagram", active: true }, { id: "roblox", active: true, recreation: false }]
+  const out = mergeItems(cur, new Map([["roblox", false], ["discord", true]]))
+  assert.deepEqual(out, [{ id: "instagram", active: true }, { id: "roblox", active: false, recreation: false }, { id: "discord", active: true }])
+  assert.deepEqual(mergeItems(undefined as any, new Map([["a", true]])), [{ id: "a", active: true }])
+})
+test("tên miền chặn thêm bật theo nhóm; lọc IP công khai", () => {
+  const m = denyMap({ lienquan: true })
+  assert.equal(m.get("garena.vn"), true)
+  assert.equal(m.get("riotgames.com"), false)
+  assert.equal(m.has("nextdns.io"), false)
   assert.equal(isPublicIp("113.161.1.2"), true)
   for (const ip of ["192.168.1.8", "10.0.0.1", "172.16.5.1", "100.64.0.1", "", undefined]) assert.equal(isPublicIp(ip), false)
 })

@@ -4,9 +4,10 @@
 const abSchedTxt = (s) => s.enabled ? `Tự chặn ${s.from}–${s.to} · ${typeof dayTxt === "function" ? dayTxt(s.days) : s.days.map((d) => DAYS[d]).join(", ")}` : "Chưa đặt giờ chặn";
 function appBlockCard() {
   const a = S.d?.apps; if (!a) return "";
-  if (!a.configured) return isAdmin() ? `<div class="card" style="margin-bottom:16px"><div class="card-h"><span style="color:var(--pri)">${I.console || I.clock}</span><h2>Chặn game & chat</h2></div><div class="alert">${I.alert}<div>Chưa kết nối bộ lọc Cloudflare. Cần đặt 2 secret <b>CF_API_TOKEN</b> và <b>CF_ACCOUNT_ID</b> cho Worker, rồi trỏ DNS của router về Cloudflare.</div></div></div>` : "";
+  if (!a.configured) return isAdmin() ? `<div class="card" style="margin-bottom:16px"><div class="card-h"><span style="color:var(--pri)">${I.console || I.clock}</span><h2>Chặn game & chat</h2></div><div class="alert">${I.alert}<div>Chưa kết nối bộ lọc NextDNS. Chạy <b>bin/setup-appblock.sh</b> để nhập API key, rồi trỏ DNS của router về NextDNS.</div></div></div>` : "";
   return `<div class="card" style="margin-bottom:16px"><div class="card-h"><span style="color:var(--pri)">${I.console || I.clock}</span><h2>Chặn game & chat</h2><div class="grow"></div><small class="hide-m">Gạt để chặn cho cả nhà</small></div>
     ${a.err ? `<div class="alert bad">${I.alert}<div>Chưa áp dụng được: ${esc(a.err)}</div></div>` : ""}
+    ${a.linkedOk ? "" : `<div class="alert">${I.alert}<div>Bộ lọc chưa nhận ra mạng nhà nên <b>chưa chặn được</b>. Mở app này bằng WiFi nhà một lần là tự nhận lại.</div></div>`}
     <div class="list">
       ${a.apps.map((x) => `<div class="row" style="cursor:default"><div style="min-width:0"><div class="nm">${esc(x.name)}</div><div class="meta">${x.active ? `<span style="color:var(--bad)">Đang chặn</span>${x.on ? "" : x.id === "bypass" ? " (tự bật khi chặn game)" : " theo giờ"}` : "Đang cho dùng"}${x.applied ? "" : " · đang áp dụng…"}</div></div>
         <button class="sw ${x.on ? "on" : ""}" role="switch" aria-checked="${x.on}" aria-label="Chặn ${esc(x.name)}" data-appsw="${x.id}"></button></div>`).join("")}
@@ -38,3 +39,11 @@ document.addEventListener("click", async (e) => {
   }
   if (e.target.closest("[data-appsched]")) appSchedSheet();
 });
+// Đang ở nhà mà NextDNS chưa biết IP nhà: trình duyệt gọi link cập nhật (chỉ gọi được từ trong mạng nhà), rồi báo server đọc lại
+let abRelinkAt = 0;
+function abRelink() {
+  const u = S.d?.apps?.relink; if (!u || Date.now() - abRelinkAt < 120000) return;
+  abRelinkAt = Date.now();
+  fetch(u, { mode: "no-cors", cache: "no-store" }).then(() => api("/apps/relinked", { body: {} })).then(() => load()).catch(() => {});
+}
+setInterval(abRelink, 15000);

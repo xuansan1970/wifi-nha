@@ -12,7 +12,7 @@ import { waRoutes } from "./lib/webauthn.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import { insight } from "./lib/insight.mts"
-import { APPS, appView, loadApps, saveSched, toggleApp } from "./lib/appblock.mts"
+import { APPS, applyApps, appView, loadApps, saveSched, toggleApp } from "./lib/appblock.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
@@ -95,7 +95,7 @@ async function cleanRule(b: any, all: number[]): Promise<Rule> {
 }
 
 // Dữ liệu gửi cho giao diện: ảnh chụp + người + chặn tạm + mức dùng hôm nay
-async function view(snapMaxAge: number, s: Session) {
+async function view(snapMaxAge: number, s: Session, clientIp = "") {
   const [snap, st, meta, devices, usage, fam] = await Promise.all([
     getSnapshot(snapMaxAge),
     loadState(),
@@ -172,7 +172,7 @@ async function view(snapMaxAge: number, s: Session) {
     usage: usage.date === today ? usage.m : {},
     kinds: KIND_VI,
     net: await familyView(snap),
-    apps: appView(await loadApps(), Date.now(), parent),
+    apps: appView(await loadApps(), Date.now(), parent, clientIp),
   }
 }
 
@@ -248,7 +248,7 @@ async function handle(req: Request): Promise<Response> {
     const dev = (req.headers.get("user-agent") ?? "").slice(0, 120)
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ip, dev, ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/apps/toggle", "/apps/sched", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
+    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/apps/toggle", "/apps/sched", "/apps/relinked", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
       throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
@@ -310,10 +310,10 @@ async function handle(req: Request): Promise<Response> {
       return json({ open: out })
     }
     // fast=1: trả dữ liệu đã lưu (≤10 phút) ngay; mặc định: làm mới nếu cũ hơn 20s
-    if (path === "/view") return json(await view(url.searchParams.get("fast") ? 10 * 60_000 : 20_000, s))
+    if (path === "/view") return json(await view(url.searchParams.get("fast") ? 10 * 60_000 : 20_000, s, req.headers.get("cf-connecting-ip") ?? ""))
     if (path === "/refresh" && m === "POST") {
       await buildSnapshot()
-      return json(await view(60_000, s))
+      return json(await view(60_000, s, req.headers.get("cf-connecting-ip") ?? ""))
     }
     if (path === "/log") {
       needAdmin(s)
@@ -701,6 +701,10 @@ async function handle(req: Request): Promise<Response> {
       const nm = (APPS as any)[body.app].name
       await L([{ t: Date.now(), ok: !st.err, by: s.name, text: `${body.on ? "Bật chặn" : "Bỏ chặn"} ${nm}${st.err ? ` — lỗi: ${st.err}` : ""}` }])
       if (st.err) throw new Http(502, st.err)
+      return json({ ok: true })
+    }
+    if (path === "/apps/relinked" && m === "POST") {
+      await applyApps()
       return json({ ok: true })
     }
     if (path === "/apps/sched" && m === "POST") {

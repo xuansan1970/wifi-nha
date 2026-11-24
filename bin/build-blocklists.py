@@ -41,7 +41,7 @@ hotspotshield.com hsselite.com hola.org holavpn.com turbovpn.com x-vpn.com urban
 mullvad.net ivpn.net betternet.co vpnify.com ultrasurf.us browsec.com zenmate.com touchvpn.net getlantern.org psiphon.ca psiphon3.com
 torproject.org openvpn.net wireguard.com softether.org vpngate.net tailscale.com zerotier.com""".split()
 # Không chặn: trang tin/quyền riêng tư bị gom chung trong nguồn "anticensorship"
-BYPASS_KEEP = {"eff.org", "jitsi.org", "wikileaks.org", "privacytools.io", "browserleaks.com", "ooni.org", "turkeyblocks.org", "censorship.ai", "gfw.report", "democracy.earth", "akasha.world", "dat.foundation", "guardianproject.info", "ahmia.fi"}
+BYPASS_KEEP = {"nextdns.io", "eff.org", "jitsi.org", "wikileaks.org", "privacytools.io", "browserleaks.com", "ooni.org", "turkeyblocks.org", "censorship.ai", "gfw.report", "democracy.earth", "akasha.world", "dat.foundation", "guardianproject.info", "ahmia.fi"}
 
 roblox = resolve("roblox")
 discord = resolve("discord")
