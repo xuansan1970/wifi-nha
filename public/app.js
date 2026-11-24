@@ -727,8 +727,8 @@ function netHero() {
   </section>`;
 }
 function netRuleSheet(init) {
-  const f = Object.assign({ name: "", days: [0, 1, 2, 3, 4, 5, 6], offAt: "22:00", onAt: "06:00", enabled: true, mode: "off" }, JSON.parse(JSON.stringify(init || {})));
-  const PRE = [["Giờ ngủ", "22:00", "06:00", [0, 1, 2, 3, 4, 5, 6]], ["Giờ học tối", "19:00", "21:00", [1, 2, 3, 4, 5]], ["Nghỉ trưa", "12:00", "13:30", [0, 1, 2, 3, 4, 5, 6]]];
+  const f = Object.assign({ name: "", days: [0, 1, 2, 3, 4, 5, 6], offAt: "21:00", onAt: "06:30", enabled: true, mode: "off" }, JSON.parse(JSON.stringify(init || {})));
+  const PRE = [["Giờ ngủ", "21:00", "06:30", [0, 1, 2, 3, 4, 5, 6]], ["Giờ học tối", "19:00", "21:00", [1, 2, 3, 4, 5]], ["Nghỉ trưa", "12:00", "13:30", [0, 1, 2, 3, 4, 5, 6]]];
   const draw = () => {
     sheet(`<div class="grab"></div><div class="sheet-h"><div class="t"><h3>${f.id ? "Sửa giờ nghỉ cả nhà" : "Thêm giờ nghỉ cả nhà"}</h3><p>Đến giờ tắt, mọi WiFi gia đình tự tắt; đến giờ mở tự bật lại.</p></div><button class="btn ghost icon" data-close>${I.x}</button></div>
       ${f.id ? "" : `<div class="field"><label class="lbl">Chọn nhanh</label><div class="opts" id="pre">${PRE.map(([n, a, b], i) => `<button class="opt" data-p="${i}">${n} ${a}–${b}</button>`).join("")}</div></div>`}

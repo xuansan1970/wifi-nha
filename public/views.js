@@ -56,7 +56,7 @@ function familySheet() {
         <div class="meta">${esc(r.name)} · ${dayTxt(r.days)}${r.mode === "ghost" ? " · <b>giả mạng hỏng</b>" : ""}</div>${r.enabled ? dayBar(ruleWins(r)) : '<div class="meta">Đang tạm tắt</div>'}</div>
         <div class="rr" style="flex-direction:column;align-items:flex-end;gap:6px"><button class="sw ${r.enabled ? "on" : ""}" role="switch" aria-checked="${r.enabled}" aria-label="Bật/tắt giờ nghỉ" data-fr-t="${r.id}"></button>
         <div style="display:flex"><button class="btn ghost sm icon" data-fr-e="${r.id}" aria-label="Sửa">${I.edit}</button><button class="btn ghost sm icon" data-fr-d="${r.id}" aria-label="Xoá">${I.trash}</button></div></div></div>`).join("")}</div>`
-        : `<div class="empty"><b>Chưa có giờ nghỉ chung</b>Ví dụ: tắt cả nhà 22:00 → mở 6:00 mỗi ngày.</div>`}
+        : `<div class="empty"><b>Chưa có giờ nghỉ chung</b>Ví dụ: tắt cả nhà 21:00 → mở 6:30 mỗi ngày.</div>`}
       <div class="foot"><button class="btn" data-close>Đóng</button><button class="btn pri" id="fradd">${I.plus}Thêm giờ nghỉ</button></div>`);
     $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
     $("#fradd").onclick = () => netRuleSheet();

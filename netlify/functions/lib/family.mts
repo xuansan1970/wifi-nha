@@ -27,6 +27,7 @@ export type Family = {
   lim?: string[] // WiFi do "Giờ dùng WiFi" tắt (gid:ssidId) — tới giờ dùng phải tự bật lại dù trễ cron hay lỗi mạng
   changedAt?: number
   changedBy?: string
+  v?: number // phiên bản dữ liệu (chuyển đổi 1 lần, xem ensureDefaultRule)
 }
 
 const KEY = "family"
@@ -43,6 +44,7 @@ export const loadFamily = async (): Promise<Family> => {
     lim: f.lim ?? [],
     changedAt: f.changedAt,
     changedBy: f.changedBy,
+    v: f.v ?? 0,
   }
 }
 const saveFamily = (f: Family) => setJSON(KEY, f)
@@ -408,10 +410,18 @@ export async function tickLimits(f: Family, from: number, to: number, now: numbe
 
 // Lịch MẶC ĐỊNH luôn tồn tại và luôn bật: bấm tay chỉ có tác dụng tạm tới lần đổi lịch kế tiếp, không bao giờ làm mất lịch tự động
 export const DEFAULT_RULE_ID = "mac-dinh"
-export const defaultRule = (): NetRule => ({ id: DEFAULT_RULE_ID, name: "Mặc định hằng ngày", days: [0, 1, 2, 3, 4, 5, 6], offAt: "22:00", onAt: "06:30", enabled: true, mode: "off" })
+export const DEFAULT_OFF = "21:00"
+export const DEFAULT_ON = "06:30"
+export const defaultRule = (): NetRule => ({ id: DEFAULT_RULE_ID, name: "Mặc định hằng ngày", days: [0, 1, 2, 3, 4, 5, 6], offAt: DEFAULT_OFF, onAt: DEFAULT_ON, enabled: true, mode: "off" })
 // Trả true nếu đã phải tạo/bật lại lịch mặc định (không có lịch nào đang bật)
 export async function ensureDefaultRule(): Promise<boolean> {
   const f = await loadFamily()
+  // 24/11/2026: giờ tắt mặc định đổi 22:00 → 21:00. Chỉ đổi 1 lần cho lịch mặc định đang lưu; sau đó chỉnh tay giờ nào cũng được giữ nguyên
+  if ((f.v ?? 0) < 1) {
+    f.rules = f.rules.map((r) => (r.id === DEFAULT_RULE_ID && r.offAt === "22:00" ? { ...r, offAt: DEFAULT_OFF } : r))
+    f.v = 1
+    await saveFamily(f)
+  }
   if (f.rules.some((r) => r.enabled)) return false
   const old = f.rules.find((r) => r.id === DEFAULT_RULE_ID)
   await saveRules((rs) => (old ? rs.map((r) => (r.id === DEFAULT_RULE_ID ? { ...r, enabled: true } : r)) : [...rs, defaultRule()].slice(-20)))
@@ -455,7 +465,7 @@ export async function saveTimers(fn: (t: Timer[]) => Timer[]) {
 export async function tickFamily(from: number, to: number, now: number): Promise<LogItem[]> {
   const logs: LogItem[] = []
   if (await ensureDefaultRule().catch(() => false))
-    logs.push({ t: now, ok: true, by: "Hệ thống", role: "system", text: "Không có lịch tự động nào đang bật → bật lại lịch mặc định (tắt 22:00, mở 06:30)" })
+    logs.push({ t: now, ok: true, by: "Hệ thống", role: "system", text: `Không có lịch tự động nào đang bật → bật lại lịch mặc định (tắt ${DEFAULT_OFF}, mở ${DEFAULT_ON})` })
   let f = await loadFamily()
   const due = f.timers.filter((t) => t.at <= now)
   if (due.length) {
