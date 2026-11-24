@@ -163,6 +163,21 @@ const STEPS: (() => Promise<void>)[] = [
     const lg = (await (await import("./state.mts")).getLog()).filter((l) => l.t > Date.now() - 100 * 60000 && /chặn|Chặn|Gỡ|Bỏ/.test(l.text)).slice(0, 25).map((l) => `${new Date(l.t + 7 * 3600e3).toISOString().slice(11, 16)} ${l.by}: ${l.text}`)
     console.log("EXP recent-log", JSON.stringify(lg).slice(0, 3000))
   },
+  async () => {
+    // 20:45 anh San yêu cầu: rà toàn bộ máy (đang nối và máy cũ) xem máy nào còn chưa rõ thông tin
+    const { getSnapshot } = await import("./snapshot.mts")
+    const { loadLan } = await import("./lan.mts")
+    const [devices, meta, lan, snap] = await Promise.all([loadDevices(), loadMeta(), loadLan(), getSnapshot(10 * 60_000)])
+    const on = new Map<string, any>()
+    for (const r of snap.routers ?? []) for (const c of r.clients ?? []) if (!c.wired || !on.has(c.mac)) on.set(c.mac, c)
+    const rows = Object.entries(devices).sort((a: any, b: any) => b[1].lastSeen - a[1].lastSeen).map(([m, d]: any) => {
+      const c = on.get(m)
+      return [m, meta[m]?.custom || d.name, d.kind, d.vendor || "", d.rawName || "", d.os || "", d.ssid || "", d.floor || "", new Date(d.lastSeen + 7 * 3600e3).toISOString().slice(5, 16), c ? c.ip : "-", lan[m]?.name || "", lan[m]?.model || "", meta[m]?.owner ? "chủ" : ""].join("|")
+    })
+    const txt = rows.join("\n")
+    for (let i = 0, k = 0; i < txt.length; i += 3400, k++) console.log(`EXPDEV ${k}\n${txt.slice(i, i + 3400)}`)
+    console.log("EXPDEV END", rows.length)
+  },
 ]
 export async function expStep(): Promise<boolean> {
   const st = await getJSON<{ id: string; stage: number }>("exp", { id: "", stage: 0 })

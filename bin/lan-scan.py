@@ -3,7 +3,7 @@
 rồi gửi lên app WiFi Nhà. Chạy trên một máy macOS đang nối WiFi nhà:  python3 bin/lan-scan.py
 Cách dò: ping cả dải → bảng ARP (IP ↔ MAC) → mDNS ngược (tên máy) → dịch vụ Bonjour (tên hiển thị, đời máy) → cổng 62078 (iPhone/iPad)
 → SSDP/UPnP (TV, loa, thiết bị thông minh) → NetBIOS (máy Windows). Token gửi dữ liệu nằm ở file .lan-token (không đưa lên Git)."""
-import concurrent.futures as cf, json, os, re, socket, subprocess, sys, urllib.request
+import concurrent.futures as cf, json, os, plistlib, re, socket, subprocess, sys, urllib.request
 
 API = "https://wifi-nha.giadinhxuan.workers.dev/api/lan/report"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,8 +38,13 @@ def main():
         sys.exit("Máy này chưa nối mạng (en0 không có IP).")
     base = me.rsplit(".", 1)[0]
     ips = [f"{base}.{i}" for i in range(1, 255)]
-    with cf.ThreadPoolExecutor(96) as ex:
-        list(ex.map(lambda ip: sh(["ping", "-c1", "-t1", ip], 2), ips))
+    ttl = {}
+    def ping(ip):
+        m = re.search(r"ttl=(\d+)", sh(["ping", "-c1", "-t1", ip], 2))
+        if m: ttl[ip] = int(m.group(1))
+    for _ in range(2):  # quét 2 lượt: máy đang ngủ thường trả lời ở lượt sau
+        with cf.ThreadPoolExecutor(96) as ex:
+            list(ex.map(ping, ips))
     dev = {}  # ip -> thông tin
     for line in sh(["arp", "-an"]).splitlines():
         m = re.search(r"\(([\d.]+)\) at ([0-9a-f:]+)", line)
@@ -62,6 +67,16 @@ def main():
             if h:
                 host_ip[h.lower()] = ip
                 if not dev[ip]["name"]: dev[ip]["name"] = h.replace("-", " "); dev[ip]["via"].append("mDNS")
+    # 1b) Hỏi thẳng từng máy (mDNS một-một): nhiều máy không trả lời câu hỏi phát chung nhưng trả lời khi được hỏi riêng
+    def rev1(ip):
+        for l in sh(["dig", "-x", ip, "@" + ip, "-p", "5353", "+short", "+time=1", "+tries=1"], 3).splitlines():
+            if l.strip().endswith(".local."): return ip, l.strip()[:-7]
+        return ip, ""
+    with cf.ThreadPoolExecutor(48) as ex:
+        for ip, h in ex.map(rev1, [i for i in dev if not dev[i]["name"]]):
+            if h:
+                host_ip[h.lower()] = ip
+                dev[ip]["name"] = h.replace("-", " "); dev[ip]["via"].append("mDNS hỏi riêng")
 
     # 2) Dịch vụ Bonjour: tên hiển thị + đời máy
     def browse(tp):
@@ -105,12 +120,32 @@ def main():
 
     # 4) Cổng đặc trưng: 62078 = iPhone/iPad; 8008 = Android TV/Chromecast; 554 = camera IP; 6668 = thiết bị Tuya
     def ports(ip):
-        return ip, [p for p in (62078, 8008, 445, 7000, 554, 6668) if port_open(ip, p)]
+        return ip, [p for p in (62078, 8008, 445, 7000, 554, 6668, 80, 135, 3389, 5000) if port_open(ip, p)]
     with cf.ThreadPoolExecutor(64) as ex:
         for ip, ps in ex.map(ports, list(dev)):
             d = dev[ip]
             if 62078 in ps and not d["os"]: d["os"] = "iOS"; d["via"].append("cổng 62078")
             if 8008 in ps and not d["os"]: d["os"] = "Android TV/Cast"; d["via"].append("cổng 8008")
+            if (135 in ps or 3389 in ps or (445 in ps and ttl.get(ip) == 128)) and not d["os"]: d["os"] = "Windows"; d["via"].append("cổng Windows")
+            if 7000 in ps and not d["model"]:
+                # AirPlay tự khai tên và đời máy (Mac, Apple TV, loa, TV có AirPlay)
+                try:
+                    info = plistlib.loads(urllib.request.urlopen(f"http://{ip}:7000/info", timeout=3).read())
+                    if info.get("name") and (not d["name"] or "mDNS" in d["via"]): d["name"] = str(info["name"])
+                    if info.get("model"): d["model"] = str(info["model"])
+                    d["via"].append("AirPlay")
+                except Exception:
+                    pass
+            if 80 in ps and not d["model"] and not d["name"]:
+                try:
+                    r = urllib.request.urlopen(f"http://{ip}/", timeout=2)
+                    body = r.read(3000).decode("utf-8", "ignore")
+                    t = re.search(r"(?i)<title>([^<]{2,60})", body)
+                    sv = r.headers.get("Server", "")
+                    if t or sv: d["model"] = (t.group(1).strip() if t else sv)[:60]; d["via"].append("trang web của máy")
+                except Exception:
+                    pass
+            if not d["os"] and ttl.get(ip) == 128: d["os"] = "Windows"; d["via"].append("TTL 128")
             tail = d["mac"][-4:].upper()
             # Thiết bị thông minh không tự khai tên: nhận theo cổng dịch vụ đặc trưng
             if 554 in ps and not d["name"]: d["name"] = f"Camera IP ·{tail}"; d["model"] = d["model"] or "Camera (RTSP 554)"; d["via"].append("cổng 554")
