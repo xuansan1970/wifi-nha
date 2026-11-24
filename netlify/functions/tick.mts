@@ -5,13 +5,15 @@ import { runBackup, runDigest } from "./lib/backup.mts"
 import { raise } from "./lib/notify.mts"
 import { driftCheck } from "./lib/family.mts"
 import { applyApps, configured } from "./lib/appblock.mts"
-import { auditDue, auditOnce } from "./lib/audit.mts"
+import { auditDue, auditOnce, expStep } from "./lib/audit.mts"
 import { blockWatch } from "./lib/blockwatch.mts"
 
 // Chạy mỗi 5 phút (UTC) — lịch tự quy đổi sang giờ Việt Nam bên trong
 export default async () => {
   const now = Date.now()
   // Lượt kiểm toán (1 lần mỗi AUDIT_ID) chạy riêng 1 nhịp để đủ lượt gọi mạng; lịch bị lỡ 5 phút sẽ được bù ở nhịp sau
+  // Nhịp dành cho bước thử nghiệm: vẫn ghi "nhịp tim" để hệ thống giám sát không báo động giả
+  if (await expStep().catch((e) => (console.error("exp", e), false))) return void (await saveBeat({ at: now, ok: true, ran: 0 }).catch(() => {}))
   if (await auditDue().catch(() => false)) return void (await auditOnce().catch((e) => console.error("audit", e)))
   const prev = await loadBeat().catch(() => null)
   try {

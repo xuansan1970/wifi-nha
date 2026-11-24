@@ -103,6 +103,20 @@ export function macsOf(t: Target, meta: Meta) {
     .filter(([, m]) => m.owner === t.id)
     .map(([mac]) => mac)
 }
+// iPhone, Mac, Android đời mới dùng một địa chỉ MAC KHÁC NHAU cho từng tên WiFi. Thử thật 24/11: chặn MacBook trên Ninesouth13,
+// 10 giây sau máy tự nhảy sang WiFi nhà khác đã lưu với địa chỉ mới và có mạng lại. Vì vậy chặn 1 máy phải chặn mọi địa chỉ
+// mà máy đó từng dùng. Nhận ra "cùng một máy" bằng tên máy tự khai (hostname); tên chung chung (iPhone, MacBook Air…) thì không gộp.
+const GENERIC_HOST = /^(\*|localhost|unknown|iphone|ipad|android.*|galaxy.*|macbook( air| pro)?|imac|wlan\d*|lwip\d*|espressif|esp[-_ ].*|lg_smart.*|h3c_.*)$/i
+export const linkName = (raw: any) => {
+  const n = String(raw ?? "").trim().toLowerCase()
+  return n.length >= 3 && !GENERIC_HOST.test(n) ? n : ""
+}
+export function siblingMacs(macs: string[], devices: Record<string, Dev>): string[] {
+  const out = new Set(macs.map((m) => R.macKey(m)))
+  const names = new Set([...out].map((m) => linkName(devices[m]?.rawName)).filter(Boolean))
+  if (names.size) for (const [m, d] of Object.entries(devices)) if (out.size < 12 && names.has(linkName(d.rawName))) out.add(m)
+  return [...out]
+}
 export function labelOf(t: Target, s: State, devices: Record<string, Dev>, meta: Meta) {
   if (t.kind === "person") return s.people.find((p) => p.id === t.id)?.name ?? "Người dùng"
   const k = R.macKey(t.id)

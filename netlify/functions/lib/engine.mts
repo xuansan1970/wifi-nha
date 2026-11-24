@@ -5,7 +5,7 @@ import { ensureOui } from "./smart.mts"
 import { tickFamily } from "./family.mts"
 import {
   addLog, blockMacs, labelOf, loadDevices, loadMeta, LogItem, macsOf, mutate, nextMidnightVN, loadState, rebootGroups,
-  Rule, State, Target, unblockMacs, vn,
+  Rule, siblingMacs, State, Target, unblockMacs, vn,
 } from "./state.mts"
 import { getJSON, isKvLimit, setJSON } from "./store.mts"
 
@@ -101,8 +101,13 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
       return { t, ok: true, by, text: `${a.enable ? "Bật" : "Tắt"} WiFi · ${a.label}` }
     }
     const meta = await loadMeta()
-    const macs = macsOf(a.target, meta)
-    if (!macs.length) throw new Error("chưa gán thiết bị nào cho người này")
+    const base = macsOf(a.target, meta)
+    if (!base.length) throw new Error("chưa gán thiết bị nào cho người này")
+    const key0 = `${a.target.kind}:${a.target.id}`
+    // Chặn/mở mọi địa chỉ WiFi của cùng một máy (xem siblingMacs); khi mở thì gồm cả các địa chỉ đã chặn kèm lúc trước
+    const kept = a.kind === "unblock" ? ((await loadState()).temps.find((x) => x.key === key0)?.macs ?? []) : []
+    const macs = siblingMacs([...new Set([...base, ...kept])], await loadDevices())
+    const more = macs.length > base.length ? ` (kèm ${macs.length - base.length} địa chỉ WiFi khác của máy)` : ""
     const gids = await allGids()
     const key = `${a.target.kind}:${a.target.id}`
     if (a.kind === "block") {
@@ -115,7 +120,7 @@ export async function exec(a: Action, by: string): Promise<LogItem> {
         s.temps = s.temps.filter((x) => x.key !== key)
         if (a.until) s.temps.push({ key, label: a.label, macs, until: a.until, reason: a.reason ?? "" })
       })
-      return { t, ok: true, by, text: `Chặn mạng ${a.label}${a.reason ? ` (${a.reason})` : ""}` }
+      return { t, ok: true, by, text: `Chặn mạng ${a.label}${a.reason ? ` (${a.reason})` : ""}${more}` }
     }
     await retry(() => unblockMacs(macs, gids))
     await verifyBlocked(macs, gids, false)

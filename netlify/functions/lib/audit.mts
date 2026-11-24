@@ -74,3 +74,81 @@ export async function auditOnce() {
   }
   console.log("AUDIT END")
 }
+
+// ---- Thử chặn THẬT có đo giờ (anh San duyệt 24/11): mỗi nhịp tick (5 phút) chạy đúng 1 bước, theo thứ tự; mỗi EXP_ID chạy 1 vòng ----
+// Máy đo đặt trong mạng nhà ghi lại thời điểm thật sự rớt mạng / có mạng lại. Kết quả kiểm toán lưu vào kho rồi in ra ở bước cuối
+// (vì khi chính máy đo bị chặn thì không xem log trực tiếp được).
+export const EXP_ID = "2026-11-24-quat-1"
+const FAN = { mac: "c493bb22273e", label: "Quạt phòng San (thử chặn thật)" }
+const MAC = { mac: "f6685c574bff", label: "MacBook Pro của San (thử chặn thật)" }
+const t8 = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(11, 19)
+async function expBlock(d: { mac: string; label: string }, on: boolean) {
+  const { exec } = await import("./engine.mts")
+  const { addLog } = await import("./state.mts")
+  const target = { kind: "device" as const, id: d.mac }
+  const log = await exec(on ? { kind: "block", target, label: d.label, until: Date.now() + 14 * 60000, reason: "thử nghiệm" } : { kind: "unblock", target, label: d.label }, "Kiểm toán")
+  await addLog([{ ...log, role: "system" }])
+  console.log("EXP", on ? "block" : "unblock", d.label, t8(), log.ok, log.text)
+}
+async function expAudit(tag: string) {
+  const o = await blockAudit("router")
+  const pack = { at: t8(), routers: o.routers.map((r: any) => ({ name: r.name, blocked: r.blocked, err: r.blErr || r.clErr, vanOnline: r.biChanMaVanOnline, co: r.clients.filter((c: string) => c.startsWith(FAN.mac) || /MacBook Pro của San/i.test(c)) })) }
+  await setJSON(`exp-audit-${tag}`, pack)
+  console.log("EXPAUDIT", tag, JSON.stringify(pack).slice(0, 3500))
+}
+const STEPS: (() => Promise<void>)[] = [
+  async () => { await expBlock(FAN, true); const { setAllGames } = await import("./appblock.mts"); console.log("EXP games-off", t8(), (await setAllGames(false)).err ?? "ok") }, // đã chạy 19:30
+  async () => expAudit("quat"), // quạt đang bị chặn: danh sách chặn và danh sách máy online nói gì?
+  async () => { await expBlock(FAN, false); const { setAllGames } = await import("./appblock.mts"); console.log("EXP games-on", t8(), (await setAllGames(true)).err ?? "ok") },
+  async () => {
+    // 19:35 phát hiện: 5 phút sau khi chặn quạt, danh sách chặn trên cả 3 router đã TRỐNG. Đo xem mục chặn biến mất sau bao nhiêu giây, ở router nào trước.
+    await expBlock(MAC, true)
+    const poll: string[] = []
+    for (let k = 0; k < 9; k++) {
+      await new Promise((r) => setTimeout(r, 8000))
+      const [t2, tr] = await Promise.all([safe(R.listBlocked(7235090)), safe(R.listBlocked(233092))])
+      poll.push(`${t8()} T2=${Array.isArray(t2) ? t2.join(",") || "trống" : "lỗi"} Tret=${Array.isArray(tr) ? tr.join(",") || "trống" : "lỗi"}`)
+    }
+    await setJSON("exp-poll", poll)
+    console.log("EXPPOLL", JSON.stringify(poll))
+  },
+  async () => {
+    await expAudit("mac")
+    // Vì sao mục chặn tự biến mất? Xem cờ xung đột cấu hình của từng project và dữ liệu thô của danh sách chặn
+    const pj: any = await safe(R.call("/maint/network/common/list?page_index=1&page_size=999&version=1&include_fitap=true", "GET"))
+    const raw = await Promise.all([233092, 7235104, 7235090].map((g) => safe(R.call(`/enet/conf/group/${g}/mac_filter`, "GET"))))
+    const hs = await Promise.all([233092, 7235090].map((g) => safe(R.call(`/homescene/mac_filter/${g}`, "GET"))))
+    const dump = { projects: JSON.stringify(pj).slice(0, 2600), macFilter: JSON.stringify(raw).slice(0, 1500), homescene: JSON.stringify(hs).slice(0, 1200) }
+    await setJSON("exp-dump", dump)
+    for (const [k, v] of Object.entries(dump)) console.log("EXPDUMP", k, v)
+  },
+  async () => expBlock(MAC, false),
+  async () => { for (const tag of ["quat", "mac"]) console.log("EXPAUDIT", tag, JSON.stringify(await getJSON<any>(`exp-audit-${tag}`, null)).slice(0, 3500)); console.log("EXPPOLL", JSON.stringify(await getJSON<any>("exp-poll", null))); for (const [k, v] of Object.entries(await getJSON<any>("exp-dump", {}))) console.log("EXPDUMP", k, v); console.log("EXP END", t8()) },
+  // ---- Vòng 2 (sau khi sửa: chặn 1 máy = chặn mọi địa chỉ WiFi của máy đó) ----
+  async () => {
+    // Quạt: lần 1 mục chặn biến mất trong 5 phút. Đo lại từng 8 giây xem mất lúc nào.
+    const { buildSnapshot } = await import("./snapshot.mts")
+    await buildSnapshot().catch((e) => console.log("EXP snap-error", String(e?.message).slice(0, 100)))
+    await expBlock(FAN, true)
+    const poll: string[] = []
+    for (let k = 0; k < 6; k++) {
+      await new Promise((r) => setTimeout(r, 8000))
+      const [t2, tr] = await Promise.all([safe(R.listBlocked(7235090)), safe(R.listBlocked(233092))])
+      poll.push(`${t8()} T2=${Array.isArray(t2) ? t2.join(",") || "trống" : "lỗi"} Tret=${Array.isArray(tr) ? tr.join(",") || "trống" : "lỗi"}`)
+    }
+    await setJSON("exp-poll2", poll)
+    console.log("EXPPOLL2", JSON.stringify(poll))
+  },
+  async () => { await expBlock(FAN, false); await expBlock(MAC, true) },
+  async () => { await expAudit("mac2"); await expBlock(MAC, false) },
+  async () => { for (const k of ["exp-poll2", "exp-audit-mac2"]) console.log("EXPFINAL", k, JSON.stringify(await getJSON<any>(k, null)).slice(0, 3500)); console.log("EXP END2", t8()) },
+]
+export async function expStep(): Promise<boolean> {
+  const st = await getJSON<{ id: string; stage: number }>("exp", { id: "", stage: 0 })
+  const cur = st.id === EXP_ID ? st.stage : 0
+  if (cur >= STEPS.length) return false
+  await setJSON("exp", { id: EXP_ID, stage: cur + 1 })
+  console.log("EXP step", cur, t8())
+  await STEPS[cur]().catch((e) => console.log("EXP step-error", cur, String(e?.message || e).slice(0, 200)))
+  return true
+}

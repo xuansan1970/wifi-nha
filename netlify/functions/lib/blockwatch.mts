@@ -4,10 +4,16 @@
 import { raise } from "./notify.mts"
 import * as R from "./ruijie.mts"
 import { getSnapshot } from "./snapshot.mts"
-import { addLog, loadDevices, loadMeta, vn } from "./state.mts"
+import { addLog, linkName, loadDevices, loadMeta, vn } from "./state.mts"
 import { getJSON, setJSON } from "./store.mts"
 
-type Router = { gid: number; name: string; blocked: string[]; clients: { mac: string; wired?: boolean; ssid?: string }[] }
+type Router = { gid: number; name: string; blocked: string[]; clients: { mac: string; wired?: boolean; ssid?: string; rawName?: string }[] }
+// Máy bị chặn đổi sang địa chỉ WiFi mới (nối WiFi nhà khác) để có mạng lại: nhận ra bằng tên máy trùng với máy đang bị chặn
+export function findFollowers(routers: Router[], blockedNames: Set<string>) {
+  const all = new Set(routers.flatMap((r) => r.blocked ?? []))
+  const seen = new Set<string>()
+  return routers.flatMap((r) => (r.clients ?? []).filter((c) => !c.wired && !all.has(c.mac) && blockedNames.has(linkName(c.rawName)) && !seen.has(c.mac) && seen.add(c.mac)).map((c) => ({ mac: c.mac, name: String(c.rawName), ssid: c.ssid ?? "", router: r.name })))
+}
 // Hàm thuần để test: trả về việc cần chặn bù và máy bị chặn mà vẫn online
 export function findLeaks(routers: Router[]) {
   const all = new Set(routers.flatMap((r) => r.blocked ?? []))
@@ -20,7 +26,15 @@ export async function blockWatch(now = Date.now()) {
   const snap = await getSnapshot(5 * 60_000)
   if (!snap?.routers?.length || snap.errors?.length) return
   const { missing, online } = findLeaks(snap.routers as Router[])
-  const [devices, meta] = missing.length || online.length ? await Promise.all([loadDevices(), loadMeta()]) : [{}, {}] as any
+  const anyBlocked = (snap.routers as Router[]).some((r) => r.blocked?.length)
+  const [devices, meta] = anyBlocked ? await Promise.all([loadDevices(), loadMeta()]) : [{}, {}] as any
+  if (anyBlocked) {
+    const names = new Set<string>((snap.routers as Router[]).flatMap((r) => r.blocked ?? []).map((m) => linkName(devices[m]?.rawName)).filter(Boolean))
+    for (const f of findFollowers(snap.routers as Router[], names).slice(0, 4)) {
+      const res = await Promise.all((snap.routers as Router[]).map((r) => R.blockMac(r.gid, f.mac).then(() => true, () => false)))
+      await addLog([{ t: now, ok: res.every(Boolean), by: "Hệ thống", role: "system", text: `Chặn thêm địa chỉ mới của "${f.name}" (máy đang bị chặn đã nối WiFi ${f.ssid} bằng địa chỉ khác)` }])
+    }
+  }
   const nameOf = (m: string) => meta[m]?.custom || devices[m]?.name || m
   for (const x of missing.slice(0, 6)) {
     const ok = await R.blockMac(x.gid, x.mac).then(() => true, () => false)

@@ -1,6 +1,7 @@
 // Ảnh chụp toàn bộ hệ thống: router, WiFi, thiết bị đang online, danh sách chặn.
 // Lưu vào Blobs để mở app là có dữ liệu ngay (rồi cập nhật nền).
 import * as R from "./ruijie.mts"
+import { loadLan, withLan } from "./lan.mts"
 import { identify, loadOui } from "./smart.mts"
 import { Dev, floorOf, loadDevices, loadMeta, saveDevices } from "./state.mts"
 import { cacheGet, cachePut, getJSON, setJSON } from "./store.mts"
@@ -46,7 +47,7 @@ async function settle<T>(p: Promise<T>, fb: T, errs: string[]) {
 
 async function build(): Promise<Snapshot> {
   const projects = await R.listProjects()
-  const [devices, oui, meta] = await Promise.all([loadDevices(), loadOui(), loadMeta()])
+  const [devices, oui, meta, lan] = await Promise.all([loadDevices(), loadOui(), loadMeta(), loadLan().catch(() => ({} as Record<string, any>))])
   const now = Date.now()
   const allErrors: string[] = []
 
@@ -86,7 +87,8 @@ async function build(): Promise<Snapshot> {
         wlanDownRate: s.wlanDownRate || "",
         schedule: R.parseTmngt(s.tmngt),
       }))
-      const cl = clients.map((c: any) => {
+      const cl = clients.map((c0: any) => {
+        const c = withLan(c0, lan[c0.mac])
         const reg = devices[c.mac]
         const id = identify(c, meta[c.mac]?.custom, oui)
         const d: Dev = (devices[c.mac] = {

@@ -72,3 +72,16 @@ test("canh chặn: tìm tầng chưa nhận lệnh chặn và máy bị chặn m
   assert.deepEqual(r.online, [{ gid: 2, router: "T1", mac: "aa", ssid: "Ninesouth13" }])
   assert.deepEqual(findLeaks([{ gid: 1, name: "Tret", blocked: [], clients: [{ mac: "bb" }] }]), { missing: [], online: [] })
 })
+
+test("chặn 1 máy = chặn mọi địa chỉ WiFi của máy đó; tên chung chung thì không gộp nhầm máy khác", async () => {
+  const { siblingMacs, linkName } = await import("../netlify/functions/lib/state.mts")
+  const { findFollowers } = await import("../netlify/functions/lib/blockwatch.mts")
+  const dev = (rawName: string) => ({ rawName, firstSeen: 0, lastSeen: 0 }) as any
+  const devices = { aa0000000001: dev("MacBook Pro của San"), aa0000000002: dev("macbook pro của san"), aa0000000003: dev("iPhone"), aa0000000004: dev("iPhone"), aa0000000005: dev("Macbook Air Jerry"), aa0000000006: dev("") }
+  assert.deepEqual(siblingMacs(["AA:00:00:00:00:01"], devices).sort(), ["aa0000000001", "aa0000000002"])
+  assert.deepEqual(siblingMacs(["aa0000000003"], devices), ["aa0000000003"], "2 chiếc cùng tên 'iPhone' là 2 máy khác nhau")
+  assert.deepEqual(siblingMacs(["aa0000000006"], devices), ["aa0000000006"])
+  assert.equal(linkName("MacBook Air"), "")
+  const routers = [{ gid: 1, name: "T2", blocked: ["aa0000000001"], clients: [{ mac: "aa0000000009", rawName: "MacBook Pro của San", ssid: "TV" }, { mac: "aa0000000005", rawName: "Macbook Air Jerry" }, { mac: "aa0000000001", rawName: "MacBook Pro của San" }] }]
+  assert.deepEqual(findFollowers(routers, new Set(["macbook pro của san"])), [{ mac: "aa0000000009", name: "MacBook Pro của San", ssid: "TV", router: "T2" }])
+})

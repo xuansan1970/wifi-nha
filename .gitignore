@@ -6,3 +6,4 @@ node_modules
 .wrangler
 *.pass
 .test-build
+.lan-token

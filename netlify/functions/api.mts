@@ -10,6 +10,7 @@ import { allUsers, clearCookie, login, makeToken, publicUsers, readSession, Sess
 import { exec, Usage } from "./lib/engine.mts"
 import { waRoutes } from "./lib/webauthn.mts"
 import { blockAudit } from "./lib/audit.mts"
+import { saveLan } from "./lib/lan.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import { insight } from "./lib/insight.mts"
@@ -224,6 +225,12 @@ async function handle(req: Request): Promise<Response> {
       if (w) return w
     }
     if (path === "/logout") return json({ ok: true }, 200, { "Set-Cookie": clearCookie })
+    // Máy quét trong mạng nhà (bin/lan-scan.py) gửi tên/đời máy tìm được — xác thực bằng secret LAN_TOKEN
+    if (path === "/lan/report" && m === "POST") {
+      const tok = envGet("LAN_TOKEN") || ""
+      if (!tok || req.headers.get("x-lan-token") !== tok) return json({ error: "Sai token" }, 401)
+      return json(await saveLan(body.devices))
+    }
     // Máy chạy go2rtc tự báo link tunnel mới (trycloudflare đổi link mỗi lần khởi động) — xác thực bằng secret CAM_TOKEN
     if (path === "/cam/gateway" && m === "POST") {
       const tok = envGet("CAM_TOKEN") || ""
