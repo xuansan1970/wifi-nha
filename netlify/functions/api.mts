@@ -14,6 +14,7 @@ import { saveLan } from "./lib/lan.mts"
 import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import { insight } from "./lib/insight.mts"
+import { hideSet } from "./lib/hide.mts"
 import { ITEMS, applyApps, appStats, appView, editDomain, loadApps, saveSched, toggleApp, setAllGames } from "./lib/appblock.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
@@ -39,10 +40,14 @@ async function gids() {
   return (await R.listProjects()).map((p: any) => p.gid as number)
 }
 
-// Ba Mẹ được đặt lịch theo người/thiết bị (giờ nghỉ, giới hạn giờ/ngày); lịch khởi động lại router / tắt WiFi lẻ chỉ Xuân San
-const PARENT_RULES = ["block", "quota"]
+// Bộ lọc giấu WiFi riêng + IoT khỏi Ba Mẹ
+async function hideCtx() {
+  const [snap, devices, fam] = await Promise.all([getSnapshot(10 * 60_000), loadDevices(), loadFamily()])
+  return hideSet(snap.routers, ghostSet(fam), devices)
+}
 
-function needAdmin(s: Session) {
+// Chỉ còn eWeb và kho dữ liệu thô là riêng Xuân San (hai chỗ này lộ WiFi riêng + IoT)
+function needOwner(s: Session) {
   if (s.role !== "admin") throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 }
 
@@ -138,7 +143,8 @@ async function view(snapMaxAge: number, s: Session, clientIp = "") {
   const iotSsids = new Set<string>()
   snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => !isFamilySsid(r.gid, x, ghost) && iotSsids.add(x.name)))
   const iotMac = (mac: string) => isIotDevice(devices[mac], iotSsids)
-  // Ba Mẹ: giấu WiFi IoT/ẩn và mọi thiết bị IoT, không cần thông tin kỹ thuật
+  // Ba Mẹ: thấy mọi thứ như Xuân San, chỉ giấu WiFi riêng/IoT và mọi thiết bị IoT
+  const H = hideSet(snap.routers, ghost, devices)
   const routers = parent
     ? snap.routers.map((r: any) => ({
         gid: r.gid,
@@ -146,16 +152,16 @@ async function view(snapMaxAge: number, s: Session, clientIp = "") {
         floor: r.floor,
         order: r.order,
         online: r.online,
-        device: null,
-        devices: [],
+        device: r.device,
+        devices: r.devices,
         blocked: r.blocked.filter((m: string) => !iotMac(m)),
         ssids: r.ssids.filter((x: any) => isFamilySsid(r.gid, x, ghost)).map((x: any) => ({ ...x, ghost: ghost.has(`${r.gid}:${x.id}`) })),
         clients: r.clients.filter((c: any) => !iotSsids.has(c.ssid) && !iotMac(c.mac)),
-        errors: [],
+        errors: r.errors,
       }))
     : snap.routers.map((r: any) => ({ ...r, ssids: r.ssids.map((x: any) => ({ ...x, private: isPrivateSsid(x), ghost: ghost.has(`${r.gid}:${x.id}`) })) }))
   let notif: any = null
-  if (!parent) {
+  {
     const [log, seen] = await Promise.all([getLog(), getJSON<number>(`seen-${s.uid}`, 0)])
     const items = log.filter((l) => l.role === "parent").slice(0, 40)
     notif = { unread: items.filter((l) => l.t > seen).length, items, seen }
@@ -163,18 +169,18 @@ async function view(snapMaxAge: number, s: Session, clientIp = "") {
   return {
     me: s,
     at: snap.at,
-    errors: parent ? [] : snap.errors,
+    errors: snap.errors,
     routers,
     notif,
     people: st.people,
     temps: st.temps,
-    rules: parent ? st.rules.filter((r) => PARENT_RULES.includes(r.type)) : st.rules,
+    rules: parent ? st.rules.filter(H.rule) : st.rules,
     blocked: parent ? blocked.filter((b) => !iotMac(b.mac)) : blocked,
     known: parent ? known.filter((k) => !iotMac(k.mac)) : known,
     usage: usage.date === today ? usage.m : {},
     kinds: KIND_VI,
     net: await familyView(snap),
-    apps: appView(await loadApps(), Date.now(), parent, clientIp),
+    apps: appView(await loadApps(), Date.now(), false, clientIp),
   }
 }
 
@@ -256,8 +262,6 @@ async function handle(req: Request): Promise<Response> {
     const dev = (req.headers.get("user-agent") ?? "").slice(0, 120)
     const L = (items: LogItem[]) => addLog(items.map((i) => ({ ip, dev, ...i, role: s.role })))
     const parent = s.role !== "admin"
-    if (parent && !["/me", "/news", "/view", "/refresh", "/block", "/unblock", "/wifi/toggle", "/logout", "/net/toggle", "/net/grant", "/net/grant/end", "/net/rules", "/net/scene", "/net/timer", "/net/limits", "/apps/toggle", "/apps/all", "/apps/sched", "/apps/relinked", "/apps/domain", "/apps/stats", "/cam/config", "/cam/log", "/device", "/people", "/rules", "/wifi/secret", "/wifi/password"].includes(path) && !/^\/(net\/rules|net\/timer|net\/limits|people|rules)\//.test(path))
-      throw new Http(403, "Chức năng này chỉ dành cho Xuân San")
 
     // Ba Mẹ không được đụng vào thiết bị / WiFi IoT
     const guardIot = async (target: Target) => {
@@ -267,6 +271,14 @@ async function handle(req: Request): Promise<Response> {
       const g = ghostSet(await loadFamily())
       snap.routers.forEach((r: any) => r.ssids.forEach((x: any) => !isFamilySsid(r.gid, x, g) && iot.add(x.name)))
       if (isIotDevice(devices[target.id], iot)) throw new Http(403, "Thiết bị IoT chỉ Xuân San chỉnh được")
+    }
+
+    const guardSsid = async (gid: number, ssidId: number) => {
+      if (parent && !(await hideCtx()).fam.has(`${gid}:${ssidId}`)) throw new Http(403, "WiFi này chỉ Xuân San chỉnh được")
+    }
+    // Lịch nhắm vào WiFi bị giấu / máy IoT: Ba Mẹ không tạo, sửa, xoá được
+    const guardRule = async (r: any) => {
+      if (parent && !(await hideCtx()).rule(r)) throw new Http(403, "Lịch này chỉ Xuân San sửa được")
     }
 
     if (path === "/me") return json({ me: s })
@@ -324,18 +336,16 @@ async function handle(req: Request): Promise<Response> {
       return json(await view(60_000, s, req.headers.get("cf-connecting-ip") ?? ""))
     }
     if (path === "/log") {
-      needAdmin(s)
-      return json({ log: await getLog() })
+      const H = parent ? await hideCtx() : null
+      return json({ log: (await getLog()).filter((l) => !H || H.text(l.text)) })
     }
     // Phiên bản cũ của lịch/cài đặt: xem danh sách, và quay lại 1 phiên bản (bản hiện tại cũng được lưu thành phiên bản mới → quay lại được tiếp)
     if (path === "/versions") {
-      needAdmin(s)
       const key = String(url.searchParams.get("key") || "family")
       if (!BACKUP_KEYS.includes(key as any)) throw new Http(400, "key không hợp lệ")
       return json({ key, versions: await listVersions(key) })
     }
     if (path === "/restore" && m === "POST") {
-      needAdmin(s)
       const v = await getVersion(Number(body.id))
       if (!v || !BACKUP_KEYS.includes(v.k as any)) throw new Http(404, "Không có phiên bản này")
       const fields = CONFIG_FIELDS[v.k]
@@ -346,8 +356,8 @@ async function handle(req: Request): Promise<Response> {
     }
     // Nhật ký chỉ-thêm, lưu vĩnh viễn (chỉ Xuân San xem). ?format=csv để tải về, ?before=<id> để lật trang
     if (path === "/audit") {
-      needAdmin(s)
-      const rows = await auditList(Number(url.searchParams.get("limit")) || 200, Number(url.searchParams.get("before")) || 0)
+      const H = parent ? await hideCtx() : null
+      const rows = (await auditList(Number(url.searchParams.get("limit")) || 200, Number(url.searchParams.get("before")) || 0)).filter((r: any) => !H || H.text(r.text))
       if (url.searchParams.get("format") !== "csv") return json({ rows })
       const q = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`
       const head = "id,thoi_gian_VN,ok,nguoi,vai_tro,noi_dung,ip,thiet_bi,truoc,sau"
@@ -362,7 +372,6 @@ async function handle(req: Request): Promise<Response> {
       return json({ gatewayUrl })
     }
     if (path === "/cam/config" && m === "POST") {
-      needAdmin(s)
       const raw = String(body.gatewayUrl || "").trim().replace(/\/$/, "")
       if (raw && !/^https?:\/\/.+/.test(raw)) throw new Http(400, "URL gateway phải bắt đầu bằng https:// hoặc http://")
       const next = { gatewayUrl: raw, at: Date.now() }
@@ -404,7 +413,6 @@ async function handle(req: Request): Promise<Response> {
       return json({ ok: true })
     }
     if (path === "/reboot" && m === "POST") {
-      needAdmin(s)
       const all = await gids()
       const target = body.gid === "all" ? all : [Number(body.gid)].filter((g) => all.includes(g))
       if (!target.length) throw new Http(400, "Router không hợp lệ")
@@ -585,10 +593,11 @@ async function handle(req: Request): Promise<Response> {
     }
 
     if (path === "/rules" && m === "POST") {
-      if (parent && !PARENT_RULES.includes(body.type)) throw new Http(403, "Loại lịch này chỉ Xuân San đặt được")
       const rule = await cleanRule(body, await gids())
       if (rule.target) await guardIot(rule.target)
-      if (parent && (await loadState()).rules.some((r) => r.id === rule.id && !PARENT_RULES.includes(r.type))) throw new Http(403, "Lịch này chỉ Xuân San sửa được")
+      await guardRule(rule)
+      const old = parent ? (await loadState()).rules.find((r) => r.id === rule.id) : null
+      if (old) await guardRule(old)
       await mutate((st) => {
         const i = st.rules.findIndex((r) => r.id === rule.id)
         if (i >= 0) st.rules[i] = rule
@@ -598,10 +607,11 @@ async function handle(req: Request): Promise<Response> {
     }
     const rm = path.match(/^\/rules\/([\w-]+)(\/toggle)?$/)
     if (rm) {
+      const old = parent ? (await loadState()).rules.find((r) => r.id === rm[1]) : null
+      if (old) await guardRule(old)
       await mutate((st) => {
         const r = st.rules.find((x) => x.id === rm[1])
         if (!r) throw new Http(404, "Không tìm thấy lịch")
-        if (parent && !PARENT_RULES.includes(r.type)) throw new Http(403, "Lịch này chỉ Xuân San sửa được")
         if (m === "DELETE") st.rules = st.rules.filter((x) => x.id !== rm[1])
         else if (rm[2] && m === "POST") r.enabled = !r.enabled
         else throw new Http(405, "Không hỗ trợ")
@@ -630,8 +640,7 @@ async function handle(req: Request): Promise<Response> {
       return json({ ok: true })
     }
 
-    // ---------- chỉ admin ----------
-    needAdmin(s)
+    // ---------- quản trị: Xuân San và Ba Mẹ như nhau (WiFi bị giấu thì Ba Mẹ không sửa/xoá được) ----------
 
     if (path === "/wifi/create" && m === "POST") {
       const name = String(body.name || "").trim()
@@ -658,6 +667,7 @@ async function handle(req: Request): Promise<Response> {
     if (path === "/wifi/update" && m === "POST") {
       const gid = Number(body.gid)
       if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      await guardSsid(gid, Number(body.ssidId))
       const p: R.SsidPatch = {}
       if (body.name !== undefined) {
         const n = String(body.name).trim()
@@ -697,6 +707,7 @@ async function handle(req: Request): Promise<Response> {
     if (path === "/wifi/delete" && m === "POST") {
       const gid = Number(body.gid)
       if (!(await gids()).includes(gid)) throw new Http(400, "Router không hợp lệ")
+      await guardSsid(gid, Number(body.ssidId))
       await R.deleteSsid(gid, Number(body.ssidId))
       await L([{ t: Date.now(), ok: true, by: s.name, text: `Xoá WiFi “${String(body.name || body.ssidId)}”` }])
       await buildSnapshot().catch(() => {})
@@ -723,7 +734,7 @@ async function handle(req: Request): Promise<Response> {
       if (r.st.err) throw new Http(502, r.st.err)
       return json({ ok: true })
     }
-    if (path === "/apps/stats") return json(await appStats(!parent).catch((e) => { throw new Http(502, e.message) }))
+    if (path === "/apps/stats") return json(await appStats(true).catch((e) => { throw new Http(502, e.message) }))
     if (path === "/apps/relinked" && m === "POST") {
       await applyApps()
       return json({ ok: true })
@@ -735,22 +746,27 @@ async function handle(req: Request): Promise<Response> {
       return json({ ok: true })
     }
     if (path === "/insight") {
-      needAdmin(s)
-      return json(await insight())
+      const ins: any = await insight()
+      if (parent) {
+        const H = await hideCtx()
+        for (const f of ins.floors) {
+          f.seen = f.seen.filter((x: any) => !H.mac(x.mac))
+          f.ssids = f.ssids.filter((x: any) => !H.names.has(x.ssid))
+        }
+      }
+      return json(ins)
     }
     if (path === "/inventory") {
-      needAdmin(s)
+      needOwner(s)
       return json(await inventory())
     }
     if (path === "/pin" && m === "POST") {
-      needAdmin(s)
       await setPin(String(body.uid), String(body.pin))
       await L([{ t: Date.now(), ok: true, by: s.name, text: `Đổi mã PIN tài khoản ${body.uid}` }])
       return json({ ok: true })
     }
     // Tự kiểm tra hệ thống cảnh báo (chỉ Quản trị): email thử / cảnh báo thử / làm "nhịp tim" cũ để thử watchdog
     if (path === "/selftest" && m === "POST") {
-      needAdmin(s)
       if (body.kind === "email") {
         const r = await sendMail("[WiFi Nhà] Email thử", `Email thử từ app WiFi Nhà, gửi bởi ${s.name}.`)
         return json(r, r.ok ? 200 : 502)
@@ -773,7 +789,6 @@ async function handle(req: Request): Promise<Response> {
       throw new Http(400, "kind phải là email, alert, stale, backup, restoretest , digest hoặc blockaudit")
     }
     if (path === "/accounts") {
-      needAdmin(s)
       return json({ users: await allUsers() })
     }
 

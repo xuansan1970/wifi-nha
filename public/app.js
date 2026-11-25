@@ -71,7 +71,9 @@ const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết 
 const TAB_ALIAS = { family: "devices", rules: "wifi" };
 const PARENT_TABS = noCam([["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["news", "Tính năng mới", "spark"], ["settings", "Tài khoản", "user"]]);
 const MOBILE_ADMIN = noCam(["home", "devices", "wifi", "cameras", "more"]);
-const isAdmin = () => S.me?.role === "admin";
+// Ba Mẹ ngang quyền Xuân San: cùng giao diện, cùng chức năng. isOwner chỉ còn dùng cho eWeb + kho dữ liệu thô.
+const isOwner = () => S.me?.role === "admin";
+const isAdmin = () => !!S.me;
 // Quản lý các con / thiết bị / giờ nghỉ / giới hạn giờ: Xuân San và Ba Mẹ đều dùng được
 const canFamily = () => !!S.me;
 const tabs = () => (isAdmin() ? ADMIN_TABS : PARENT_TABS);
@@ -229,7 +231,7 @@ function shell() {
       <div class="grow"></div>
       ${isAdmin() ? `<button class="nav" id="bell" data-tip="Thông báo">${I.bell}<span>Thông báo</span>${S.d?.notif?.unread ? `<span class="badge">${S.d.notif.unread}</span>` : ""}</button>` : ""}
       <button class="nav" id="themeBtn" data-tip="Giao diện">${getTheme() === "dark" ? I.sun : I.moon}<span>${getTheme() === "dark" ? "Chế độ Sáng" : "Chế độ Tối"}</span></button>
-      <div class="me"><span class="av round" style="background:var(--pri);color:var(--pri-ink)">${esc(ini(S.me.name))}</span><div><b>${esc(S.me.name)}</b><small>${isAdmin() ? "Quản trị" : "Phụ huynh"}</small></div><button class="btn ghost sm icon" id="lo" title="Đăng xuất">${I.out}</button></div>
+      <div class="me"><span class="av round" style="background:var(--pri);color:var(--pri-ink)">${esc(ini(S.me.name))}</span><div><b>${esc(S.me.name)}</b><small>${isOwner() ? "Quản trị" : "Ba Mẹ · toàn quyền"}</small></div><button class="btn ghost sm icon" id="lo" title="Đăng xuất">${I.out}</button></div>
     </aside>
     <div>
       <header class="mtop" id="mtop"><img src="/icon.svg" alt=""><b id="mt">WiFi Nhà</b><button class="btn ghost icon" id="themeBtn2" aria-label="Đổi giao diện">${getTheme() === "dark" ? I.sun : I.moon}</button>${isAdmin() ? `<button class="btn ghost icon" id="bell2" aria-label="Thông báo" style="position:relative">${I.bell}${S.d?.notif?.unread ? `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px">${S.d.notif.unread}</span>` : ""}</button>` : ""}<button class="btn ghost icon" id="rf2" aria-label="Làm mới">${I.refresh}</button></header>
@@ -324,7 +326,7 @@ function routerCard(r) {
     ${d.newFirmware ? `<div><span class="chip warn">Có firmware mới ${esc(d.newFirmware.replace("ReyeeOS ", ""))}</span></div>` : ""}
     ${r.errors?.length ? `<div class="meta" style="color:var(--bad)">${esc(r.errors[0])}</div>` : ""}
     <div class="list rt-ss">${r.ssids.map((s) => `<div class="row" style="cursor:default;grid-template-columns:minmax(0,1fr) auto;padding:6px 0"><div style="min-width:0"><div class="nm" style="font-size:14px"><span class="ell">${esc(s.name)}</span>${s.private ? '<span class="chip pri" style="height:18px;font-size:10.5px">Riêng</span>' : s.iot || s.hidden ? '<span class="chip" style="height:18px;font-size:10.5px">IoT</span>' : ""}</div></div><button class="sw ${onAir(s) ? "on" : ""}${offBySched(s) ? " sched" : ""}" role="switch" aria-checked="${onAir(s)}" aria-label="Bật/tắt ${esc(s.name)}" data-sched="${offBySched(s) ? 1 : 0}" data-wt="${s.id}" data-gid="${r.gid}" data-name="${esc(s.name)}" data-iot="${s.iot || s.hidden ? 1 : 0}"></button></div>`).join("")}</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-go="wifi" style="flex:1">${I.wifi}WiFi</button><button class="btn sm" data-eweb="${r.gid}" data-label="${esc(r.floor)}" style="flex:1" ${r.online ? "" : "disabled"}>${I.globe}eWeb</button><button class="btn sm red" data-reboot="${r.gid}" data-label="${esc(r.floor)}" style="flex:1">${I.power}Khởi động lại</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-go="wifi" style="flex:1">${I.wifi}WiFi</button><button class="btn sm" ${isOwner() ? "" : "hidden"} data-eweb="${r.gid}" data-label="${esc(r.floor)}" style="flex:1" ${r.online ? "" : "disabled"}>${I.globe}eWeb</button><button class="btn sm red" data-reboot="${r.gid}" data-label="${esc(r.floor)}" style="flex:1">${I.power}Khởi động lại</button></div>
   </div>`;
 }
 function blockedCard() {
@@ -862,7 +864,7 @@ async function loadCameras() {
       const data = await r.json();
       S.cam.streams = Object.keys(data || {});
       await ensureVideoStreamModule(S.cam.gatewayUrl);
-      if (!isAdmin()) api("/cam/log", { body: { text: "Mở xem Camera nhà" } }).catch(() => {});
+      if (!isOwner()) api("/cam/log", { body: { text: "Mở xem Camera nhà" } }).catch(() => {});
     } else {
       S.cam.streams = [];
     }
@@ -973,7 +975,7 @@ function snapCam(src) {
       if (!blob) return toast("Không xuất được ảnh chụp", 1);
       saveBlob(blob, `cam-${src}-${camStamp()}.png`);
       toast("Đã lưu ảnh chụp vào máy");
-      if (!isAdmin()) api("/cam/log", { body: { text: `Chụp ảnh ${CAM_NAMES[src] || src}` } }).catch(() => {});
+      if (!isOwner()) api("/cam/log", { body: { text: `Chụp ảnh ${CAM_NAMES[src] || src}` } }).catch(() => {});
     }, "image/png");
   } catch {
     toast("Trình duyệt không cho chụp luồng này", 1);
@@ -1047,7 +1049,7 @@ function toggleCamRec(src, btn) {
     const ext = outType.includes("mp4") ? "mp4" : "webm";
     saveBlob(new Blob(chunks, { type: outType }), `cam-${src}-${camStamp()}.${ext}`);
     toast("Đã lưu video vào máy");
-    if (!isAdmin()) api("/cam/log", { body: { text: `Quay phim ${CAM_NAMES[src] || src}` } }).catch(() => {});
+    if (!isOwner()) api("/cam/log", { body: { text: `Quay phim ${CAM_NAMES[src] || src}` } }).catch(() => {});
   };
 
   mr.start(1000);

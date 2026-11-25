@@ -135,7 +135,7 @@ function vLog() {
   ${days.length ? days.slice(0, 14).map((g) => `<div class="card" style="margin-bottom:14px"><div class="card-h"><h2>${dayWord(g.t) === "hôm nay" ? "Hôm nay" : dayWord(g.t) === "ngày mai" ? "" : new Date(g.t).toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", weekday: "long", day: "2-digit", month: "2-digit" })}</h2><div class="grow"></div><span class="chip">${g.items.reduce((a, x) => a + x.n, 0)}</span></div>
     <div class="list">${g.items.map((x) => { const [bg, fg, ic] = KC[logKind(x)]; return `<div class="row log-row" style="cursor:default"><span class="av" style="background:${bg};color:${fg}">${ic}</span><div style="min-width:0"><div class="log-t">${esc(x.text)}${x.n > 1 ? ` <span class="chip" style="height:20px">×${x.n}</span>` : ""}</div><div class="meta">${esc(x.by)} · ${x.n > 1 ? `${hmVN(x.first)}–${hmVN(x.t)}` : hmVN(x.t)}</div></div></div>`; }).join("")}</div></div>`).join("")
     : `<div class="empty"><b>Chưa có hoạt động</b>Mọi thao tác bật/tắt, khoá máy, hẹn giờ sẽ hiện ở đây.</div>`}
-  ${isAdmin() ? `<div class="card"><div class="card-h"><h2>Xuất dữ liệu</h2></div><div class="opts"><button class="btn sm" data-go="data">${I.db}Mở kho dữ liệu</button></div></div>` : ""}`;
+  ${isOwner() ? `<div class="card"><div class="card-h"><h2>Xuất dữ liệu</h2></div><div class="opts"><button class="btn sm" data-go="data">${I.db}Mở kho dữ liệu</button></div></div>` : ""}`;
 }
 function bindViews(root) {
   bindWifiHome(root);

@@ -3,6 +3,9 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-25-ba-me-toan-quyen", date: "25/11/2026", title: "Ba Mẹ có toàn quyền như Xuân San",
+    text: "Tài khoản Ba Mẹ giờ thấy đủ các mục và làm được mọi việc như Xuân San: chặn mạng mọi máy trong nhà, chặn game, tạo và sửa WiFi, đặt mọi loại lịch, khởi động lại router, xem nhật ký, đổi mã PIN. Riêng WiFi riêng của Xuân San và WiFi của thiết bị thông minh (camera, đèn…) vẫn được giữ nguyên, không hiện ra.",
+    eg: "Mẹ muốn tắt WiFi tầng 1 lúc 22 giờ mỗi tối: vào WiFi & Hẹn giờ, tự đặt lịch, không cần nhờ Xuân San." },
   { id: "2026-11-24-chan-moi-dia-chi", date: "24/11/2026", title: "Chặn một máy là chặn hẳn, không lách được bằng cách đổi WiFi",
     text: "Trước đây chặn một máy tính hay điện thoại, máy tự nối sang WiFi khác trong nhà và có mạng lại sau khoảng 10 giây. Giờ app chặn mọi “tên” mà máy đó dùng ở từng WiFi, và tự chặn tiếp nếu máy đổi tên mới.",
     eg: "Chặn MacBook của em: máy không vào được Ninesouth13, cũng không vào được WiFi TV hay WiFi nào khác trong nhà cho tới khi mở chặn." },
