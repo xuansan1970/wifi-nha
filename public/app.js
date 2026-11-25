@@ -736,7 +736,6 @@ function netRuleSheet(init) {
       ${f.id ? "" : `<div class="field"><label class="lbl">Chọn nhanh</label><div class="opts" id="pre">${PRE.map(([n, a, b], i) => `<button class="opt" data-p="${i}">${n} ${a}–${b}</button>`).join("")}</div></div>`}
       <div class="field two"><div><label class="lbl">Tắt mạng lúc</label><input class="inp" type="time" id="t1" value="${f.offAt}"></div><div><label class="lbl">Mở lại lúc</label><input class="inp" type="time" id="t2" value="${f.onAt}"></div></div>
       <div class="hint" style="margin:-6px 0 12px">Giờ mở nhỏ hơn giờ tắt = mở vào sáng hôm sau.</div>
-      <div class="field"><label class="lbl">Đến giờ tắt thì</label><div class="seg" id="md" style="width:100%"><button class="${f.mode !== "ghost" ? "on" : ""}" data-md="off" style="flex:1">Tắt mạng</button><button class="${f.mode === "ghost" ? "on" : ""}" data-md="ghost" style="flex:1">Giả mạng hỏng</button></div></div>
       <div class="field"><label class="lbl">Ngày trong tuần</label><div class="opts" id="dy">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button class="opt ${f.days.includes(d) ? "on" : ""}" data-d="${d}" style="min-width:48px">${DAYS[d]}</button>`).join("")}</div></div>
       <div class="field"><label class="lbl">Tên lịch</label><input class="inp" id="nm" maxlength="40" value="${esc(f.name)}" placeholder="vd: Giờ ngủ"></div>
       <div class="foot"><button class="btn" data-close>Huỷ</button><button class="btn pri" id="nrs">Lưu lịch</button></div>`);
@@ -744,7 +743,6 @@ function netRuleSheet(init) {
     const sync = () => { f.offAt = $("#t1").value; f.onAt = $("#t2").value; f.name = $("#nm").value; };
     if ($("#pre")) $("#pre").onclick = (e) => { const b = e.target.closest("[data-p]"); if (!b) return; const [n, a, c, d] = PRE[Number(b.dataset.p)]; Object.assign(f, { name: n, offAt: a, onAt: c, days: [...d] }); draw(); };
     $("#dy").onclick = (e) => { const b = e.target.closest("[data-d]"); if (!b) return; const d = Number(b.dataset.d); f.days = f.days.includes(d) ? f.days.filter((x) => x !== d) : [...f.days, d]; b.classList.toggle("on"); };
-    $("#md").onclick = (e) => { const b = e.target.closest("[data-md]"); if (!b) return; f.mode = b.dataset.md; $$("#md button").forEach((x) => x.classList.toggle("on", x === b)); };
     $("#nrs").onclick = () => { sync(); if (!f.days.length) return toast("Chọn ít nhất 1 ngày", 1); if (f.offAt === f.onAt) return toast("Giờ tắt và giờ mở phải khác nhau", 1);
       act($("#nrs"), async () => { const r = await api("/net/rules", { body: f }); S.d.net = r.net; closeSheet(); render(); familySheet(); }, "Đã lưu lịch").catch(() => {}); };
   };

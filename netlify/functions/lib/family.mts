@@ -38,8 +38,9 @@ export const loadFamily = async (): Promise<Family> => {
     on: f.on ?? true,
     ghost: f.ghost ?? [],
     grant: f.grant ? { ...f.grant, prev: asScene(f.grant.prev, "on") } : null,
-    rules: (f.rules ?? []).map((r: any) => ({ ...r, mode: r.mode === "ghost" ? "ghost" : "off" })),
-    timers: f.timers ?? [],
+    // Đã gỡ tính năng Giả mạng hỏng: lịch/hẹn giờ cũ kiểu đó chuyển thành tắt mạng thường
+    rules: (f.rules ?? []).map((r: any) => ({ ...r, mode: "off" })),
+    timers: (f.timers ?? []).map((t: any) => (t.scene === "ghost" ? { ...t, scene: "off" } : t)),
     limits: f.limits ?? [],
     lim: f.lim ?? [],
     changedAt: f.changedAt,
@@ -97,7 +98,7 @@ export function cleanRule(b: any): NetRule {
     offAt,
     onAt,
     enabled: b.enabled !== false,
-    mode: b.mode === "ghost" ? "ghost" : "off",
+    mode: "off",
   }
 }
 
@@ -436,7 +437,7 @@ export async function saveRules(fn: (rules: NetRule[]) => NetRule[]) {
 
 // ---- Hẹn giờ một lần ("tắt sau 1 tiếng", "mở lúc 17:00") ----
 export function cleanTimer(b: any, by: string, now = Date.now()): Timer {
-  if (!SCENES.includes(b.scene)) throw new Error("Chọn việc cần làm")
+  if (!SCENES.includes(b.scene) || b.scene === "ghost") throw new Error("Chọn việc cần làm")
   let at: number
   if (b.minutes !== undefined && b.minutes !== null && b.minutes !== "") {
     const m = Math.round(Number(b.minutes))

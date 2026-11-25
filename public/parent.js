@@ -31,7 +31,7 @@ function sceneHero() {
 function sceneKeys() {
   const sc = S.d.net?.scene;
   return `<div class="card pz-card"><div class="card-h"><h2>Bấm 1 lần</h2><div class="grow"></div><small class="hide-m">Áp dụng ngay cho cả nhà</small></div>
-    <div class="pz-keys">${["on", "off", "ghost"].map((k) => { const u = SCENE_UI[k]; return `<button class="pz-key ${u.c} ${sc === k && !S.d.net?.grant ? "cur" : ""}" data-scene="${k}" aria-pressed="${sc === k}">
+    <div class="pz-keys">${["on", "off"].map((k) => { const u = SCENE_UI[k]; return `<button class="pz-key ${u.c} ${sc === k && !S.d.net?.grant ? "cur" : ""}" data-scene="${k}" aria-pressed="${sc === k}">
       <span class="pz-ic">${I[u.ic]}</span><b>${u.t}</b><small>${u.d}</small>${sc === k && !S.d.net?.grant ? '<span class="pz-now">Đang dùng</span>' : ""}</button>`; }).join("")}</div>
     <div class="meta" style="margin-top:10px">${isAdmin() ? sceneScope() : "Camera, thiết bị nhà thông minh và WiFi riêng của Xuân San không bị ảnh hưởng."}</div></div>`;
 }
@@ -47,7 +47,7 @@ function timerCard() {
   return `<div class="card pz-card"><div class="card-h"><span style="color:var(--pri)">${I.timer}</span><h2>Hẹn giờ tự làm</h2></div>
     <div class="meta" style="margin:-6px 0 10px">Chọn việc, rồi chọn lúc nào. Tới giờ hệ thống tự làm, không cần bấm lại.</div>
     <div class="lbl">Việc cần làm</div>
-    <div class="seg pz-seg" id="pzs">${["off", "ghost", "on"].map((k) => `<button class="${PT.scene === k ? "on" : ""}" data-ps="${k}">${SCENE_UI[k].s}</button>`).join("")}</div>
+    <div class="seg pz-seg" id="pzs">${["off", "on"].map((k) => `<button class="${PT.scene === k ? "on" : ""}" data-ps="${k}">${SCENE_UI[k].s}</button>`).join("")}</div>
     <div class="lbl" style="margin-top:14px">Làm lúc nào</div>
     <div class="pz-when">${[[30, "Sau 30 phút"], [60, "Sau 1 tiếng"], [120, "Sau 2 tiếng"]].map(([m, l]) => `<button class="opt" data-pm="${m}">${l}</button>`).join("")}<button class="opt" id="pzat">Chọn giờ…</button></div>
     ${T.length ? `<div class="lbl" style="margin-top:16px">Đã hẹn</div><div class="list">${T.map((t) => `<div class="row" style="cursor:default;grid-template-columns:auto minmax(0,1fr) auto"><span class="av soft">${I[SCENE_UI[t.scene].ic]}</span><div style="min-width:0"><div class="nm" style="white-space:normal;display:block">${SCENE_UI[t.scene].s} · <span class="num">${hmVN(t.at)}</span> ${dayWord(t.at)}</div><div class="meta">${esc(t.by)} hẹn · còn ${left(t.at)}</div></div><button class="btn sm" data-pdel="${t.id}">Huỷ</button></div>`).join("")}</div>` : ""}

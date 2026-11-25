@@ -445,7 +445,7 @@ async function handle(req: Request): Promise<Response> {
     }
     if (path === "/net/scene" && m === "POST") {
       const scene = body.scene as Scene
-      if (!SCENES.includes(scene)) throw new Http(400, "Kịch bản không hợp lệ")
+      if (!SCENES.includes(scene) || scene === "ghost") throw new Http(400, "Kịch bản không hợp lệ")
       const log = await setScene(scene, s.name)
       await L([log])
       if (!log.ok) throw new Http(502, log.text)
