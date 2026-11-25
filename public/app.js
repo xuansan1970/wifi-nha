@@ -1216,6 +1216,20 @@ async function boot() {
   try { const r = await api("/me"); S.me = r.me; boot(); } catch { if (!S.me) renderLogin(); }
 })();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+// Tự tải lại khi app có bản mới (mọi tài khoản, mọi máy): so số phiên bản trong /sw.js mỗi 2 phút và mỗi lần mở lại app.
+// Đang gõ dở thì chờ lượt sau để không mất chữ.
+let _appVer = null;
+async function verCheck() {
+  try {
+    const v = (await (await fetch("/sw.js", { cache: "no-store" })).text()).match(/wn-v\d+/)?.[0];
+    if (!v) return;
+    if (!_appVer) { _appVer = v; return; }
+    if (v !== _appVer && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")) location.reload();
+  } catch {}
+}
+verCheck();
+setInterval(verCheck, 120000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) verCheck(); });
 
 /* ---------- Cầu nối app tổng Nhà Mình: trạng thái + đồng bộ Sáng/Tối ---------- */
 const HUB_ORIGIN = "https://nha-minh.giadinhxuan.workers.dev";
