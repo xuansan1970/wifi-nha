@@ -79,3 +79,28 @@ test("2 nút: Chặn toàn bộ gạt mọi mục game (đường lách chặn t
   assert.equal(desired(st, Date.parse("2026-11-25T10:00:00+07:00")).roblox, false)
   delete (globalThis as any).__CF_DO
 })
+
+test("hạ tầng nhà (đèn hồ cá, app Nhà Mình) luôn nằm trong danh sách cho qua gửi lên NextDNS, kể cả khi bấm Chặn toàn bộ", async () => {
+  const { setAllGames, HOME_ALLOW } = await import("../netlify/functions/lib/appblock.mts")
+  assert.deepEqual(HOME_ALLOW, ["doseen.com", "giadinhxuan.workers.dev"])
+  const { LISTS } = await import("../netlify/functions/lib/blocklists.mts")
+  const all = new Set(Object.values(LISTS).flat())
+  for (const d of HOME_ALLOW) assert.equal([...all].some((x) => x === d || x.endsWith("." + d) || d.endsWith("." + x)), false, `${d} không được nằm trong danh sách chặn`)
+  const mem = new Map<string, any>(), env = (globalThis as any)
+  env.__CF_DO = { get: async (k: string) => mem.get(k), put: async (k: string, v: any) => void mem.set(k, structuredClone(v)) }
+  const oldEnv = env.__CF_ENV, oldFetch = globalThis.fetch, puts: Record<string, any> = {}
+  env.__CF_ENV = { ...(oldEnv ?? {}), NEXTDNS_API_KEY: "k", NEXTDNS_PROFILE: "p" }
+  globalThis.fetch = (async (url: any, o: any = {}) => {
+    const path = String(url).split("/profiles/p")[1] ?? String(url)
+    if (o.method === "PUT" || o.method === "PATCH") puts[path] = JSON.parse(o.body)
+    return new Response(JSON.stringify({ data: path === "/setup" ? { linkedIp: {} } : {} }), { status: 200 })
+  }) as any
+  try {
+    mem.set("appblock", { on: {}, sched: { enabled: false, days: [1], from: "19:00", to: "21:00", groups: ["game"] }, custom: [], allow: ["hocmai.vn"], imported: true })
+    await setAllGames(true)
+    const allow = puts["/allowlist"].map((x: any) => x.id)
+    for (const d of ["doseen.com", "giadinhxuan.workers.dev", "apps.apple.com", "hocmai.vn"]) assert.ok(allow.includes(d), d)
+    assert.ok(puts["/allowlist"].every((x: any) => x.active === true))
+    assert.equal(puts["/denylist"].some((x: any) => /doseen|giadinhxuan/.test(x.id)), false)
+  } finally { globalThis.fetch = oldFetch; env.__CF_ENV = oldEnv }
+})

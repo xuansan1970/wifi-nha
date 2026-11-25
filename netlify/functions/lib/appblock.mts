@@ -53,6 +53,11 @@ const KEY = "appblock"
 // Kho ứng dụng luôn cho qua: nhóm "Online Gaming" của NextDNS chặn luôn cả App Store và Google Play (kiểm 24/11 bằng nhật ký NextDNS),
 // làm cả nhà không tải/cập nhật được app nào khi đang chặn game. Tải game về vẫn không chơi được vì máy chủ game bị chặn.
 export const STORE_ALLOW = ["apps.apple.com", "play.google.com"]
+// Hạ tầng trong nhà KHÔNG BAO GIỜ bị bộ lọc đụng tới, dù bật mục chặn nào (anh San chốt 25/11: chặn game/nội dung không được liên quan tới đèn hồ cá).
+// doseen.com: máy chủ của hãng mà đèn hồ cá AiPai phải nối tới thì web mới điều khiển được. giadinhxuan.workers.dev: các app Nhà Mình (đèn, TV, WiFi, app tổng).
+// Danh sách "luôn cho qua" của NextDNS thắng mọi luật chặn (dịch vụ, nhóm nội dung, tên miền tự thêm, chặn đường lách) và tính cả tên miền con.
+export const HOME_ALLOW = ["doseen.com", "giadinhxuan.workers.dev"]
+export const ALWAYS_ALLOW = [...STORE_ALLOW, ...HOME_ALLOW]
 const QUOTA = 300_000
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
 const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
@@ -105,7 +110,7 @@ export function wantMaps(want: Record<string, boolean>) {
   }
   return { svc, cat, deny }
 }
-const sigOf = (st: AppState, want: Record<string, boolean>) => ITEMS.map((i) => (want[i.id] ? 1 : 0)).join("") + "|" + Object.values(LISTS).map((l) => l.length).join(",") + "|" + st.custom.join(",") + "|" + st.allow.join(",") + "|" + STORE_ALLOW.join(",")
+const sigOf = (st: AppState, want: Record<string, boolean>) => ITEMS.map((i) => (want[i.id] ? 1 : 0)).join("") + "|" + Object.values(LISTS).map((l) => l.length).join(",") + "|" + st.custom.join(",") + "|" + st.allow.join(",") + "|" + ALWAYS_ALLOW.join(",")
 
 export async function nx(path: string, method = "GET", body?: any): Promise<any> {
   const res = await fetch(`https://api.nextdns.io/profiles/${envGet("NEXTDNS_PROFILE")}${path}`, {
@@ -156,7 +161,7 @@ export async function applyApps(now = Date.now()): Promise<AppState> {
       await nx("/privacy/blocklists", "PUT", want.adblock ? [{ id: "nextdns-recommended" }] : [])
       await nx("/security", "PATCH", { threatIntelligenceFeeds: want.security, googleSafeBrowsing: want.security, cryptojacking: want.security })
       await nx("/denylist", "PUT", [...deny].map(([id, active]) => ({ id, active })))
-      await nx("/allowlist", "PUT", [...new Set([...STORE_ALLOW, ...st.allow])].map((id) => ({ id, active: true })))
+      await nx("/allowlist", "PUT", [...new Set([...ALWAYS_ALLOW, ...st.allow])].map((id) => ({ id, active: true })))
       // Giữ câu trả lời DNS lâu hơn để đỡ tốn lượt truy vấn (gói miễn phí có trần theo tháng)
       if (!st.boost) { await nx("/settings/performance", "PATCH", { cacheBoost: true }).catch(() => {}); st.boost = true }
       st.okSig = sig
