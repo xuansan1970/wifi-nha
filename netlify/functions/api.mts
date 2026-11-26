@@ -15,7 +15,7 @@ import { buildSnapshot, getSnapshot, inventory } from "./lib/snapshot.mts"
 import { KIND_VI } from "./lib/smart.mts"
 import { insight } from "./lib/insight.mts"
 import { hideSet } from "./lib/hide.mts"
-import { ITEMS, applyApps, appStats, appView, editDomain, loadApps, saveSched, toggleApp, setAllGames } from "./lib/appblock.mts"
+import { ITEMS, applyApps, appDiag, appStats, appView, editDomain, loadApps, saveSched, toggleApp, setAllGames } from "./lib/appblock.mts"
 import {
   addLog, getLog, isIotDevice, isPrivateSsid, labelOf, loadDevices, loadMeta, loadState, LogItem, mutate, Rule, saveMeta, Target, vn,
 } from "./lib/state.mts"
@@ -734,6 +734,7 @@ async function handle(req: Request): Promise<Response> {
       if (r.st.err) throw new Http(502, r.st.err)
       return json({ ok: true })
     }
+    if (path === "/apps/stats" && url.searchParams.get("diag") && s.role === "admin") return json(await appDiag().catch((e) => { throw new Http(502, e.message) }))
     if (path === "/apps/stats") return json(await appStats(true).catch((e) => { throw new Http(502, e.message) }))
     if (path === "/apps/relinked" && m === "POST") {
       await applyApps()

@@ -254,6 +254,12 @@ export async function appStats(withTop: boolean) {
   return { configured: true, used, blocked, quota: QUOTA, top: (top ?? []).map((x: any) => ({ domain: x.domain, queries: x.queries })) }
 }
 // Dữ liệu cho giao diện. clientIp = IP của người đang mở app: nếu họ đang ở nhà mà NextDNS chưa biết IP nhà thì trả link để trình duyệt tự cập nhật.
+// Chẩn đoán (chỉ Xuân San): danh sách cho qua đang nằm thật trên NextDNS + mọi tên miền bị chặn trong 2 ngày, để tìm thiết bị nhà bị chặn oan.
+export async function appDiag() {
+  const [allow, blocked] = await Promise.all([nx("/allowlist"), nx("/analytics/domains?status=blocked&from=-2d&limit=500")])
+  return { allow: (allow ?? []).map((x: any) => x.id), blocked: (blocked ?? []).map((x: any) => ({ domain: x.domain, queries: x.queries })) }
+}
+
 export function appView(st: AppState, now: number, parent: boolean, clientIp = "") {
   const want = desired(st, now)
   const linkedOk = !!st.ip && st.linked === st.ip
