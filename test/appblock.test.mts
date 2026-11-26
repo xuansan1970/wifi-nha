@@ -81,8 +81,10 @@ test("2 nút: Chặn toàn bộ gạt mọi mục game (đường lách chặn t
 })
 
 test("hạ tầng nhà (đèn hồ cá, app Nhà Mình) luôn nằm trong danh sách cho qua gửi lên NextDNS, kể cả khi bấm Chặn toàn bộ", async () => {
-  const { setAllGames, HOME_ALLOW } = await import("../netlify/functions/lib/appblock.mts")
-  assert.deepEqual(HOME_ALLOW, ["doseen.com", "giadinhxuan.workers.dev"])
+  const { setAllGames, HOME_ALLOW: HOME, IOT_ALLOW } = await import("../netlify/functions/lib/appblock.mts")
+  assert.deepEqual(HOME, ["doseen.com", "giadinhxuan.workers.dev"])
+  assert.ok(IOT_ALLOW.length > 0)
+  const HOME_ALLOW = [...HOME, ...IOT_ALLOW]
   const { LISTS } = await import("../netlify/functions/lib/blocklists.mts")
   const all = new Set(Object.values(LISTS).flat())
   for (const d of HOME_ALLOW) assert.equal([...all].some((x) => x === d || x.endsWith("." + d) || d.endsWith("." + x)), false, `${d} không được nằm trong danh sách chặn`)
@@ -99,7 +101,7 @@ test("hạ tầng nhà (đèn hồ cá, app Nhà Mình) luôn nằm trong danh s
     mem.set("appblock", { on: {}, sched: { enabled: false, days: [1], from: "19:00", to: "21:00", groups: ["game"] }, custom: [], allow: ["hocmai.vn"], imported: true })
     await setAllGames(true)
     const allow = puts["/allowlist"].map((x: any) => x.id)
-    for (const d of ["doseen.com", "giadinhxuan.workers.dev", "apps.apple.com", "hocmai.vn"]) assert.ok(allow.includes(d), d)
+    for (const d of ["doseen.com", "giadinhxuan.workers.dev", "apps.apple.com", "hocmai.vn", ...IOT_ALLOW]) assert.ok(allow.includes(d), d)
     assert.ok(puts["/allowlist"].every((x: any) => x.active === true))
     assert.equal(puts["/denylist"].some((x: any) => /doseen|giadinhxuan/.test(x.id)), false)
   } finally { globalThis.fetch = oldFetch; env.__CF_ENV = oldEnv }

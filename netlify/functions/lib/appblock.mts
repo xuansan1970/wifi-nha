@@ -57,7 +57,15 @@ export const STORE_ALLOW = ["apps.apple.com", "play.google.com"]
 // doseen.com: máy chủ của hãng mà đèn hồ cá AiPai phải nối tới thì web mới điều khiển được. giadinhxuan.workers.dev: các app Nhà Mình (đèn, TV, WiFi, app tổng).
 // Danh sách "luôn cho qua" của NextDNS thắng mọi luật chặn (dịch vụ, nhóm nội dung, tên miền tự thêm, chặn đường lách) và tính cả tên miền con.
 export const HOME_ALLOW = ["doseen.com", "giadinhxuan.workers.dev"]
-export const ALWAYS_ALLOW = [...STORE_ALLOW, ...HOME_ALLOW]
+// Thiết bị thông minh trong nhà (WiFi IoT) không bao giờ bị bộ lọc đụng tới (anh San chốt 26/11). NextDNS lọc theo IP nhà nên không tách được theo từng WiFi;
+// cách miễn trừ là luôn cho qua máy chủ của các hãng thiết bị: Tuya/SmartLife (đèn, máy lạnh, hub), EZVIZ/Hikvision (camera), Xiaomi (quạt), Ruijie (router).
+export const IOT_ALLOW = [
+  "tuya.com", "tuyaus.com", "tuyacn.com", "tuyaeu.com", "tuyain.com",
+  "ezvizlife.com", "ezviz7.com", "ezviz.com", "hik-connect.com", "hikvision.com",
+  "io.mi.com", "account.xiaomi.com",
+  "ruijienetworks.com", "ruijie.com.cn", "rj.link",
+]
+export const ALWAYS_ALLOW = [...STORE_ALLOW, ...HOME_ALLOW, ...IOT_ALLOW]
 const QUOTA = 300_000
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
 const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
