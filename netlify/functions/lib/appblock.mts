@@ -69,7 +69,10 @@ export const IOT_ALLOW = [
   // 4 camera gắn chip AI-Link (sân vườn, bếp, cầu thang, lầu 1) chưa rõ hãng: cho qua sẵn 2 hãng hay dùng chip này (TP-Link Tapo, Imou)
   "tplinkcloud.com", "tplinknbu.com", "imoulife.com", "easy4ipcloud.com",
 ]
-export const ALWAYS_ALLOW = [...STORE_ALLOW, ...HOME_ALLOW, ...IOT_ALLOW]
+// Dịch vụ hệ thống của Apple/Google luôn cho qua (anh San chốt 26/11, lấy từ nhật ký bị chặn thật): iCloud Private Relay (iPhone báo "relay bị chặn"),
+// DNS mã hoá của Apple, ảnh/biểu tượng của App Store và Google Play. LƯU Ý: Private Relay cũng là một đường lách bộ lọc trên máy có iCloud+.
+export const SYSTEM_ALLOW = ["mask.icloud.com", "mask-h2.icloud.com", "doh.dns.apple.com", "mzstatic.com", "aaplimg.com", "play-lh.googleusercontent.com"]
+export const ALWAYS_ALLOW = [...STORE_ALLOW, ...HOME_ALLOW, ...IOT_ALLOW, ...SYSTEM_ALLOW]
 const QUOTA = 300_000
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/
 const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/
