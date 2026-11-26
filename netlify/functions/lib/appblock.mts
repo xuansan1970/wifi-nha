@@ -64,6 +64,10 @@ export const IOT_ALLOW = [
   "ezvizlife.com", "ezviz7.com", "ezviz.com", "hik-connect.com", "hikvision.com",
   "io.mi.com", "account.xiaomi.com",
   "ruijienetworks.com", "ruijie.com.cn", "rj.link",
+  // Bổ sung 26/11 sau khi đối chiếu danh sách máy thật trên WiFi IoT: máy giặt + thiết bị LG (ThinQ), robot hút bụi Roborock
+  "lgthinq.com", "lgeapi.com", "lge.com", "roborock.com",
+  // 4 camera gắn chip AI-Link (sân vườn, bếp, cầu thang, lầu 1) chưa rõ hãng: cho qua sẵn 2 hãng hay dùng chip này (TP-Link Tapo, Imou)
+  "tplinkcloud.com", "tplinknbu.com", "imoulife.com", "easy4ipcloud.com",
 ]
 export const ALWAYS_ALLOW = [...STORE_ALLOW, ...HOME_ALLOW, ...IOT_ALLOW]
 const QUOTA = 300_000
