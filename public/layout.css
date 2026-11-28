@@ -1,0 +1,99 @@
+/* WiFi Nhà · BỐ CỤC v2 (nạp SAU cùng). Chuẩn web app: khung sát mép, nội dung lấp đầy lưới 12 cột.
+   - Máy tính, mở riêng: thanh bên sát mép 232px + vùng nội dung tràn hết bề ngang.
+   - Chạy trong Nhà Mình (đã có thanh bên của app tổng): bỏ thanh bên riêng, dùng thanh tab ngang phía trên → không còn 2 cột menu.
+   - Tablet: thanh bên thu thành dải icon 72px. Điện thoại: giữ thanh trên + thanh tab dưới. */
+:root{--side-w:232px;--gap:16px}
+
+/* ---------- Khung ---------- */
+.shell{grid-template-columns:var(--side-w) minmax(0,1fr);gap:0;padding:0}
+.side{top:0;height:100dvh;border-radius:0!important;border-width:0 1px 0 0!important;box-shadow:none!important;padding:18px 12px 14px;gap:2px;overflow-y:auto}
+.brand{padding:2px 8px 16px}
+.nav{height:40px;padding:0 12px;border-radius:12px;font-size:14px;gap:10px}
+.nav svg.i{width:19px;height:19px}
+.me{margin-top:6px;padding:8px}
+.main{padding:20px 24px 32px}
+.page{max-width:none}
+@media (min-width:1920px){.page{max-width:1680px}}
+.top{margin-bottom:var(--gap)}
+.top h1{font-size:clamp(22px,2.2vw,28px)}
+
+/* Thanh tab ngang (chỉ hiện khi chạy trong Nhà Mình trên tablet/máy tính) */
+.tnav{display:none}
+@media (min-width:720px){
+  .embed .shell{grid-template-columns:minmax(0,1fr)}
+  .embed .side{display:none}
+  .embed .tnav{display:flex;align-items:center;gap:8px;position:sticky;top:0;z-index:30;padding:10px 24px;
+    background:var(--nm-glass);-webkit-backdrop-filter:var(--nm-blur);backdrop-filter:var(--nm-blur);border-bottom:1px solid var(--nm-hair)}
+  .tnav-tabs{display:flex;gap:4px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none}
+  .tnav-tabs::-webkit-scrollbar{display:none}
+  .tn{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 14px;border-radius:12px;font-size:14px;font-weight:600;color:var(--text2);white-space:nowrap;position:relative;transition:background .15s,color .15s}
+  .tn svg.i{width:18px;height:18px}
+  .tn:hover{background:var(--nm-raise)}
+  .tn.on{background:var(--nm-grad);color:#fff;box-shadow:var(--nm-sh-btn)}
+  .tn .badge{min-width:18px;height:18px;font-size:10px}
+  .tnav-act{display:flex;align-items:center;gap:2px;flex:none;padding-left:8px;border-left:1px solid var(--nm-hair)}
+  .tnav-act .btn{position:relative}
+  .tnav-act .badge{position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px}
+  .embed .main{padding-top:18px}
+}
+@media (min-width:720px) and (max-width:1099px){.tn span:not(.badge){display:none}.tn{width:44px;padding:0;justify-content:center}.tn .badge{position:absolute;top:2px;right:2px}}
+
+/* ---------- Lưới bảng điều khiển (trang đầu) ---------- */
+.dash{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-flow:row dense;gap:var(--gap);align-items:stretch}
+.dash>*{min-width:0}
+.dash>*>.card,.dash>*>section.card{height:100%;margin:0!important}
+.dash .card,.dash .kpi{margin-bottom:0!important}
+.d-full{grid-column:1/-1}
+.d-8{grid-column:span 8}.d-4{grid-column:span 4}.d-6{grid-column:span 6}
+.d-tall{grid-row:span 2}
+.d-kpi .g4{gap:var(--gap)}
+.dash .kpi{min-height:0;padding:14px 16px;gap:4px}
+.dash .kpi .n{font-size:26px}
+.dash .pz-hero{margin:0}
+.dash .net{padding:18px 20px;gap:6px 18px}
+.dash .pwr{width:68px;height:68px}.dash .pwr .i{width:30px;height:30px}
+.dash .net-st{font-size:24px}
+.dash .pz-key{min-height:96px}
+.dash .grid.routers{gap:var(--gap)}
+@media (max-width:1279px){
+  .d-8,.d-4.d-tall{grid-column:span 12}
+  .d-tall{grid-row:auto}
+  .d-4{grid-column:span 12}
+  .dash .pz-when{grid-template-columns:repeat(4,minmax(0,1fr))}
+}
+@media (max-width:1099px){.d-6{grid-column:span 12}}
+@media (max-width:899px){
+  .dash .pz-when{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
+/* ---------- Nhật ký: các ngày xếp cột theo bề ngang ---------- */
+.log-days{display:grid;grid-template-columns:repeat(auto-fill,minmax(460px,1fr));gap:var(--gap);align-items:start}
+.log-days>.card{margin:0!important}
+
+/* ---------- Tablet: dải icon sát mép ---------- */
+@media (max-width:1099px){
+  :root{--side-w:72px}
+  .side{padding:14px 10px}
+  .nav{width:48px;height:48px;padding:0;border-radius:14px}
+  .main{padding:18px 20px 32px}
+}
+/* ---------- Điện thoại ---------- */
+@media (max-width:719px){
+  :root{--gap:12px}
+  .main{padding:12px var(--gr) calc(110px + env(safe-area-inset-bottom)) var(--gx)}
+  .dash{grid-template-columns:minmax(0,1fr)}
+  .dash>*{grid-column:1/-1!important;grid-row:auto!important}
+  .log-days{grid-template-columns:minmax(0,1fr)}
+}
+
+/* Cột phải trang đầu: WiFi + Đang chặn + Gia đình xếp chồng, cao bằng thẻ Chặn game bên trái */
+.d-stack{display:flex;flex-direction:column;gap:var(--gap);height:100%}
+.d-stack>.card{margin:0!important}
+.d-stack>.card:last-child{flex:1}
+/* Router: số cột đúng bằng số router (không chừa ô trống), thẻ cao bằng nhau, nút luôn nằm đáy thẻ */
+.dash .grid.routers{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));align-items:stretch}
+.dash .rt{height:100%}
+.dash .rt>div:last-child{margin-top:auto;display:grid!important;grid-template-columns:1fr 1fr;gap:8px}
+.dash .rt>div:last-child .red,.dash .rt>div:last-child>:only-child{grid-column:1/-1}
+.dash .rt>div:last-child [hidden]{display:none}
+.dash .rt>div:last-child:has([hidden])>.btn:first-child{grid-column:1/-1}

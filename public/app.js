@@ -235,6 +235,10 @@ function shell() {
     </aside>
     <div>
       <header class="mtop" id="mtop"><img src="/icon.svg" alt=""><b id="mt">WiFi Nhà</b><button class="btn ghost icon" id="themeBtn2" aria-label="Đổi giao diện">${getTheme() === "dark" ? I.sun : I.moon}</button>${isAdmin() ? `<button class="btn ghost icon" id="bell2" aria-label="Thông báo" style="position:relative">${I.bell}${S.d?.notif?.unread ? `<span class="badge" style="position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px">${S.d.notif.unread}</span>` : ""}</button>` : ""}<button class="btn ghost icon" id="rf2" aria-label="Làm mới">${I.refresh}</button></header>
+      <nav class="tnav" aria-label="Mục">
+        <div class="tnav-tabs">${T.map(([k, l, ic]) => `<button class="tn ${S.tab === k ? "on" : ""}" data-tab="${k}" title="${l}">${I[ic]}<span>${l}</span>${tabBadge(k, blockedN)}</button>`).join("")}</div>
+        <div class="tnav-act">${isAdmin() ? `<button class="btn ghost icon" id="bell3" aria-label="Thông báo">${I.bell}${S.d?.notif?.unread ? `<span class="badge">${S.d.notif.unread}</span>` : ""}</button>` : ""}<button class="btn ghost icon" id="themeBtn3" aria-label="Đổi giao diện">${getTheme() === "dark" ? I.sun : I.moon}</button><button class="btn ghost icon" id="lo3" aria-label="Đăng xuất" title="Đăng xuất">${I.out}</button></div>
+      </nav>
       <main class="main"><div class="page" id="page"></div></main>
     </div>
     <nav class="tabbar">${mob.map(([k, l, ic]) => `<button class="${S.tab === k || (k === "more" && moreOn) ? "on" : ""}" data-tab="${k}">${I[ic]}${l}${tabBadge(k, blockedN)}</button>`).join("")}</nav>
@@ -242,9 +246,9 @@ function shell() {
   $$("[data-tab]").forEach((b) => (b.onclick = () => go(b.dataset.tab)));
   $("#lo").onclick = lockNow;
   if ($("#bell")) $("#bell").onclick = notifSheet;
-  if ($("#bell2")) $("#bell2").onclick = notifSheet;
-  if ($("#themeBtn")) $("#themeBtn").onclick = () => toggleTheme();
-  if ($("#themeBtn2")) $("#themeBtn2").onclick = () => toggleTheme();
+  ["#bell2", "#bell3"].forEach((id) => { if ($(id)) $(id).onclick = notifSheet; });
+  ["#themeBtn", "#themeBtn2", "#themeBtn3"].forEach((id) => { if ($(id)) $(id).onclick = () => toggleTheme(); });
+  $("#lo3").onclick = lockNow;
   $("#rf2").onclick = () => refresh($("#rf2"));
   window.onscroll = () => $("#mtop")?.classList.toggle("scrolled", scrollY > 4);
 }
@@ -294,7 +298,7 @@ function render() {
   const u = S.d.notif?.unread || 0;
   if (isAdmin() && S._unread !== u) {
     S._unread = u;
-    const b1 = $("#bell"); if (b1) { let bg = $(".badge", b1); if (u) { if (!bg) { bg = document.createElement("span"); bg.className = "badge"; b1.appendChild(bg); } bg.textContent = u; } else bg?.remove(); }
+    ["#bell", "#bell3"].forEach((id) => { const b1 = $(id); if (b1) { let bg = $(".badge", b1); if (u) { if (!bg) { bg = document.createElement("span"); bg.className = "badge"; b1.appendChild(bg); } bg.textContent = u; } else bg?.remove(); } });
     const b2 = $("#bell2"); if (b2) { let bg = $(".badge", b2); if (u) { if (!bg) { bg = document.createElement("span"); bg.className = "badge"; bg.style.cssText = "position:absolute;top:2px;right:2px;min-width:17px;height:17px;font-size:10px"; b2.appendChild(bg); } bg.textContent = u; } else bg?.remove(); }
   }
 }
@@ -304,16 +308,20 @@ function vHome() {
   const R = S.d.routers, cl = clients();
   const on = R.filter((r) => r.online).length;
   const err = S.d.errors?.length ? `<div class="alert bad">${I.alert}<div><b>Một số dữ liệu chưa tải được</b><br>${esc(S.d.errors[0])}</div></div>` : "";
-  return header("Tổng quan") + err + netHero() + `<div class="pz-grid">${sceneKeys()}${timerCard()}</div>` + appBlockCard() + wifiHomeCard() + `
-  <div class="grid g4" style="margin-bottom:16px">
+  return header("Tổng quan") + err + `<div class="dash">
+  <div class="d-full d-kpi"><div class="grid g4">
     ${kpi(I.router, "Router online", `${on}/${R.length}`, on === R.length ? "Tất cả hoạt động" : "Có router mất kết nối", on === R.length ? "var(--ok)" : "var(--bad)")}
     ${kpi(I.devices, "Thiết bị online", cl.length, `${cl.filter((c) => c.kind !== "iot" && c.kind !== "camera").length} máy dùng · ${cl.filter((c) => c.kind === "iot" || c.kind === "camera").length} IoT`, "var(--pri)")}
     ${kpi(I.lock, "Đang chặn", S.d.blocked.length, S.d.temps.length ? `${S.d.temps.length} chặn tạm thời` : "thiết bị", "var(--bad)")}
     ${kpi(I.clock, "Hẹn giờ", S.d.rules.filter((r) => r.enabled).length, "lịch đang bật", "var(--f2)")}
-  </div>
-  <div class="grid g3 routers" style="align-items:start;margin-bottom:16px">${R.map(routerCard).join("")}</div>
-  <div class="grid g2" style="align-items:start">${blockedCard()}${familyMini() || `<div class="card"><div class="card-h"><h2>Gia đình</h2></div><div class="empty">Chưa có thành viên</div></div>`}</div>`;
+  </div></div>
+  <div class="d-8">${netHero()}</div><div class="d-8">${sceneKeys()}</div><div class="d-4 d-tall">${timerCard()}</div>
+  ${dashPair(appBlockCard(), `<div class="d-stack">${wifiHomeCard()}${blockedCard()}${familyMini() || `<div class="card"><div class="card-h"><h2>Gia đình</h2></div><div class="empty">Chưa có thành viên</div></div>`}</div>`)}
+  <div class="d-full"><div class="grid g3 routers">${R.map(routerCard).join("")}</div></div>
+  </div>`;
 }
+// 2 thẻ đứng cạnh nhau (mỗi thẻ nửa bề ngang); thiếu 1 thẻ thì thẻ còn lại chiếm trọn hàng
+const dashPair = (a, b) => (a && b ? `<div class="d-6">${a}</div><div class="d-6">${b}</div>` : a || b ? `<div class="d-full">${a || b}</div>` : "");
 const kpi = (ic, l, n, d, c) => `<div class="kpi"><div class="l"><span style="color:${c}">${ic}</span>${l}</div><div class="n">${n}</div><div class="d">${d}</div></div>`;
 function routerCard(r) {
   const d = r.device || {};
