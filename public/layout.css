@@ -97,3 +97,12 @@
 .dash .rt>div:last-child .red,.dash .rt>div:last-child>:only-child{grid-column:1/-1}
 .dash .rt>div:last-child [hidden]{display:none}
 .dash .rt>div:last-child:has([hidden])>.btn:first-child{grid-column:1/-1}
+
+/* ---------- Điện thoại: 4 tab, mỗi tab một chồng thẻ gọn ---------- */
+.m-stack{display:flex;flex-direction:column;gap:var(--gap)}
+.m-stack>.card,.m-stack>section.card{margin:0!important}
+@media (max-width:719px){
+  .tabbar button{min-height:52px;font-size:12px}
+  /* Nút "Chặn game" đã có riêng ở tab Chặn → tab Mạng chỉ còn Bật/Tắt WiFi */
+  .m-stack .pz-key.game{display:none}
+}

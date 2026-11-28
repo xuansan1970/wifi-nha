@@ -70,7 +70,11 @@ const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết 
 // Mục cũ đã gộp: Gia đình → Thiết bị (Các con), Hẹn giờ → WiFi & Hẹn giờ, Dữ liệu → mở từ Nhật ký
 const TAB_ALIAS = { family: "devices", rules: "wifi" };
 const PARENT_TABS = noCam([["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["news", "Tính năng mới", "spark"], ["settings", "Tài khoản", "user"]]);
-const MOBILE_ADMIN = noCam(["home", "devices", "wifi", "cameras", "more"]);
+// Điện thoại: đúng 4 tab, mỗi tab một việc — Mạng (bật/tắt, bấm 1 lần, hẹn giờ) · Chặn (game, máy đang chặn, các con) · Thiết bị · Thêm (WiFi & router, hoạt động, nhật ký, tin mới, cài đặt)
+const MOBILE_TABS = [["home", "Mạng", "power"], ["block", "Chặn", "lock"], ["devices", "Thiết bị", "devices"], ["more", "Thêm", "gear"]];
+const MOBILE_ADMIN = MOBILE_TABS.map((t) => t[0]);
+const PHONE_MQ = matchMedia("(max-width:719px)");
+const isPhone = () => PHONE_MQ.matches;
 // Ba Mẹ ngang quyền Xuân San: cùng giao diện, cùng chức năng. isOwner chỉ còn dùng cho eWeb + kho dữ liệu thô.
 const isOwner = () => S.me?.role === "admin";
 const isAdmin = () => !!S.me;
@@ -78,7 +82,7 @@ const isAdmin = () => !!S.me;
 const canFamily = () => !!S.me;
 const tabs = () => (isAdmin() ? ADMIN_TABS : PARENT_TABS);
 // Số đỏ trên mục: Thiết bị = số máy đang chặn; Tính năng mới = số cập nhật chưa xem
-const tabBadge = (k, blockedN) => { const n = k === "devices" ? blockedN : k === "news" && typeof newsUnseen === "function" ? newsUnseen() : 0; return n ? `<span class="badge">${n}</span>` : ""; };
+const tabBadge = (k, blockedN) => { const n = k === "devices" || k === "block" ? blockedN : k === "news" && typeof newsUnseen === "function" ? newsUnseen() : 0; return n ? `<span class="badge">${n}</span>` : ""; };
 
 /* ---------- API ---------- */
 async function api(path, opt = {}) {
@@ -222,7 +226,7 @@ async function renderLogin(pre) {
 function shell() {
   const T = tabs();
   const blockedN = S.d?.blocked?.length || 0;
-  const mob = isAdmin() ? MOBILE_ADMIN.map((k) => (k === "more" ? ["more", "Thêm", "gear"] : T.find((t) => t[0] === k))) : T;
+  const mob = isAdmin() ? MOBILE_TABS : T;
   const moreOn = isAdmin() && !MOBILE_ADMIN.includes(S.tab);
   $("#root").innerHTML = `<div class="shell ${isAdmin() ? "" : "simple"}">
     <aside class="side">
@@ -241,7 +245,7 @@ function shell() {
       </nav>
       <main class="main"><div class="page" id="page"></div></main>
     </div>
-    <nav class="tabbar">${mob.map(([k, l, ic]) => `<button class="${S.tab === k || (k === "more" && moreOn) ? "on" : ""}" data-tab="${k}">${I[ic]}${l}${tabBadge(k, blockedN)}</button>`).join("")}</nav>
+    <nav class="tabbar">${mob.map(([k, l, ic]) => `<button class="${S.tab === k || (k === "more" && moreOn) ? "on" : ""}" data-tab="${k}">${I[ic]}${l}${tabBadge(isAdmin() && k === "devices" ? "" : k, blockedN)}</button>`).join("")}</nav>
   </div>`;
   $$("[data-tab]").forEach((b) => (b.onclick = () => go(b.dataset.tab)));
   $("#lo").onclick = lockNow;
@@ -269,7 +273,7 @@ function go(t) {
   if (t === "cameras") loadCameras();
 }
 function moreSheet() {
-  sheet(`<div class="sheet-h"><div class="t"><h3>Thêm</h3></div></div><div class="list">${ADMIN_TABS.filter((t) => !MOBILE_ADMIN.includes(t[0])).map(([k, l, ic]) => `<button class="row" data-go="${k}"><span class="av soft">${I[ic]}</span><span class="nm">${l}</span>${I.chev}</button>`).join("")}</div>`);
+  sheet(`<div class="sheet-h"><div class="t"><h3>Thêm</h3></div></div><div class="list">${ADMIN_TABS.filter((t) => !MOBILE_ADMIN.includes(t[0])).map((t) => (t[0] === "wifi" ? ["wifi", "WiFi, router & giờ nghỉ", "wifi"] : t)).map(([k, l, ic]) => `<button class="row" data-go="${k}"><span class="av soft">${I[ic]}</span><span class="nm">${l}</span>${I.chev}</button>`).join("")}</div>`);
   $$("[data-go]").forEach((b) => (b.onclick = () => { closeSheet(); go(b.dataset.go); }));
 }
 async function refresh(btn) { await act(btn, async () => { await load("force"); if (S.tab === "cameras") await loadCameras(); }, "Đã cập nhật dữ liệu mới nhất").catch(() => {}); }
@@ -285,7 +289,7 @@ function render() {
   const pg = $("#page");
   if (!S.d) { pg.innerHTML = header("Đang tải") + `<div class="grid g3"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>`; return; }
   const V = isAdmin()
-    ? { home: vHome, devices: vDevices, cameras: vCameras, wifi: vWifiAll, data: vData, insight: vInsight, log: vLog, news: vNews, settings: vSettings }
+    ? { home: () => (isPhone() ? vHomePhone() : vHome()), block: vBlock, devices: vDevices, cameras: vCameras, wifi: vWifiAll, data: vData, insight: vInsight, log: vLog, news: vNews, settings: vSettings }
     : { home: vParentHome, family: vFamily, devices: vParentDevices, cameras: vCameras, news: vNews, settings: vSettings };
   const fn = V[S.tab] || V.home;
   const keepQ = document.activeElement?.id === "q" ? document.activeElement.selectionStart : null;
@@ -294,7 +298,7 @@ function render() {
   bind(pg);
   if (keepQ != null) { const q = $("#q"); if (q) { q.focus(); q.setSelectionRange(keepQ, keepQ); } }
   // cập nhật badge chặn + chuông (không vẽ lại #page để tránh đứt luồng đang xem)
-  const n = S.d.blocked.length; $$('[data-tab="devices"] .badge').forEach((b) => (b.textContent = n));
+  const n = S.d.blocked.length; $$('[data-tab="devices"] .badge,[data-tab="block"] .badge').forEach((b) => (b.textContent = n));
   const u = S.d.notif?.unread || 0;
   if (isAdmin() && S._unread !== u) {
     S._unread = u;
@@ -320,6 +324,17 @@ function vHome() {
   <div class="d-full"><div class="grid g3 routers">${R.map(routerCard).join("")}</div></div>
   </div>`;
 }
+// Điện thoại · tab Mạng: chỉ việc điều khiển mạng (bật/tắt + cho thêm giờ, bấm 1 lần, hẹn giờ)
+function vHomePhone() {
+  const err = S.d.errors?.length ? `<div class="alert bad">${I.alert}<div><b>Một số dữ liệu chưa tải được</b><br>${esc(S.d.errors[0])}</div></div>` : "";
+  return header("Mạng") + err + `<div class="m-stack">${netHero()}${sceneKeys()}${timerCard()}</div>`;
+}
+// Tab Chặn: chặn game & nội dung + máy đang bị chặn + các con
+function vBlock() {
+  return header("Chặn") + `<div class="m-stack">${appBlockCard()}${blockedCard()}${familyMini() || ""}</div>`;
+}
+// Xoay/thu phóng qua ngưỡng điện thoại ↔ màn lớn: vẽ lại khung cho đúng bố cục
+PHONE_MQ.addEventListener("change", () => { if (!S.me) return; if (!isPhone() && S.tab === "block") S.tab = "home"; shell(); render(); });
 // 2 thẻ đứng cạnh nhau (mỗi thẻ nửa bề ngang); thiếu 1 thẻ thì thẻ còn lại chiếm trọn hàng
 const dashPair = (a, b) => (a && b ? `<div class="d-6">${a}</div><div class="d-6">${b}</div>` : a || b ? `<div class="d-full">${a || b}</div>` : "");
 const kpi = (ic, l, n, d, c) => `<div class="kpi"><div class="l"><span style="color:${c}">${ic}</span>${l}</div><div class="n">${n}</div><div class="d">${d}</div></div>`;
@@ -1219,6 +1234,8 @@ async function boot() {
   if (typeof newsCheck === "function") newsCheck();
 }
 (async () => {
+  // chờ nạp xong mọi file JS (parent.js, appblock.js…) rồi mới vẽ, tránh lỗi "abGameState is not defined"
+  if (document.readyState === "loading") await new Promise((r) => document.addEventListener("DOMContentLoaded", r, { once: true }));
   try { const r = await api("/me"); S.me = r.me; boot(); } catch { if (!S.me) renderLogin(); }
 })();
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});

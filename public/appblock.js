@@ -21,7 +21,7 @@ function appBlockCard() {
   const others = a.items.filter((x) => x.group !== "game" && x.id !== "bypass" && x.active).length;
   return `<div class="card" style="margin-bottom:16px">${head}${abAlerts(a)}
     <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn red ab-all ${gs === "all" ? "cur" : ""}" data-appall="1" aria-pressed="${gs === "all"}" style="flex:1;height:44px">${gs === "all" ? "✓ Đang chặn toàn bộ" : "Chặn toàn bộ"}</button><button class="btn ab-all ${gs === "none" ? "cur" : ""}" data-appall="0" aria-pressed="${gs === "none"}" style="flex:1;height:44px">${gs === "none" ? "✓ Đã gỡ toàn bộ" : "Gỡ toàn bộ"}</button></div>
-    <p class="meta" style="margin:-4px 0 10px">Nút “Chặn game” ở ô “Bấm 1 lần” chính là 2 nút này. Hai nút này không đụng tới YouTube và Netflix, để TV vẫn xem được. Muốn chặn 2 mục đó thì gạt tay trong “Chặn thêm”.</p>
+    <p class="meta" style="margin:-4px 0 10px">${typeof isPhone === "function" && isPhone() ? "" : "Nút “Chặn game” ở ô “Bấm 1 lần” chính là 2 nút này. "}Hai nút này không đụng tới YouTube và Netflix, để TV vẫn xem được. Muốn chặn 2 mục đó thì gạt tay trong “Chặn thêm”.</p>
     <div class="list">
       ${abItems("game").map(abRow).join("")}${abRow(a.items.find((x) => x.id === "bypass"))}
       <div class="row wf-row" data-appsched="1" style="cursor:pointer"><div style="min-width:0;flex:1"><div class="nm">Giờ chặn</div><div class="meta">${esc(abSchedTxt(a.sched))}${a.inWindow ? ' · <span style="color:var(--bad)">đang trong giờ chặn</span>' : ""}</div></div><div class="rr">${I.chev}</div></div>

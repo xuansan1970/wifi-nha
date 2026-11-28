@@ -3,6 +3,9 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-28-dien-thoai-4-tab", date: "28/11/2026", title: "Trên điện thoại: 4 mục ở dưới, mỗi mục một việc",
+    text: "Thanh dưới cùng còn đúng 4 nút. “Mạng”: bật/tắt WiFi cả nhà, cho dùng thêm giờ, hẹn giờ. “Chặn”: chặn game, xem máy nào đang bị chặn để mở lại, xem các con. “Thiết bị”: xem máy nào đang vào mạng. “Thêm”: từng WiFi và router, nhật ký, cài đặt.",
+    eg: "Muốn chặn game, Ba bấm nút “Chặn” ở dưới rồi bấm “Chặn toàn bộ”. Muốn tắt WiFi cả nhà, bấm nút “Mạng”." },
   { id: "2026-11-28-bo-cuc-moi", date: "28/11/2026", title: "Giao diện gọn hơn, nhìn một lần thấy hết",
     text: "Trang đầu xếp lại thành các ô cạnh nhau: trên cùng là số router, số máy, số máy bị chặn; giữa là nút bật/tắt mạng, Bấm 1 lần và Hẹn giờ; dưới là chặn game, WiFi trong nhà và 3 router. Mở trong app Nhà Mình thì menu nằm ngang phía trên, không còn 2 cột menu.",
     eg: "Trên máy tính, Ba vừa thấy mạng đang bật, vừa bấm được “Chặn game” và hẹn giờ tắt WiFi mà không phải kéo xuống." },
