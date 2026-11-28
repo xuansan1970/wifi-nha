@@ -3,6 +3,9 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-28-nut-chan-game", date: "28/11/2026", title: "Nút nhanh “Chặn game” ngay cạnh nút WiFi",
+    text: "Ô “Bấm 1 lần” ở trang đầu có thêm nút “Chặn game”. Bấm 1 lần là chặn hết game, bấm lại là cho chơi. Nút này đi chung với 2 nút “Chặn toàn bộ” / “Gỡ toàn bộ” bên dưới, bấm chỗ nào thì chỗ kia cũng đổi theo.",
+    eg: "Tới giờ học, Ba bấm “Chặn game” ở trên cùng, không cần kéo xuống. Học xong bấm “Mở lại game”." },
   { id: "2026-11-24-chan-moi-dia-chi", date: "24/11/2026", title: "Chặn một máy là chặn hẳn, không lách được bằng cách đổi WiFi",
     text: "Trước đây chặn một máy tính hay điện thoại, máy tự nối sang WiFi khác trong nhà và có mạng lại sau khoảng 10 giây. Giờ app chặn mọi “tên” mà máy đó dùng ở từng WiFi, và tự chặn tiếp nếu máy đổi tên mới.",
     eg: "Chặn MacBook của em: máy không vào được Ninesouth13, cũng không vào được WiFi TV hay WiFi nào khác trong nhà cho tới khi mở chặn." },

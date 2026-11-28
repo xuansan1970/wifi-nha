@@ -1,5 +1,5 @@
 // Service worker: giữ khung app để mở nhanh & mở được khi mạng chập chờn. Không cache API.
-const C = "wn-v50";
+const C = "wn-v51";
 const SHELL = ["/", "/app.css", "/app.js", "/faceid.js", "/news.js", "/parent.css", "/parent.js", "/views.js", "/insight.js", "/appblock.js", "/nm-glass.css", "/nm-skin.css", "/nm-fx.js", "/icon.svg", "/manifest.webmanifest"];
 self.addEventListener("install", (e) => { e.waitUntil(caches.open(C).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== C).map((k) => caches.delete(k)))).then(() => self.clients.claim())); });

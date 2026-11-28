@@ -32,8 +32,16 @@ function sceneKeys() {
   const sc = S.d.net?.scene;
   return `<div class="card pz-card"><div class="card-h"><h2>Bấm 1 lần</h2><div class="grow"></div><small class="hide-m">Áp dụng ngay cho cả nhà</small></div>
     <div class="pz-keys">${["on", "off"].map((k) => { const u = SCENE_UI[k]; return `<button class="pz-key ${u.c} ${sc === k && !S.d.net?.grant ? "cur" : ""}" data-scene="${k}" aria-pressed="${sc === k}">
-      <span class="pz-ic">${I[u.ic]}</span><b>${u.t}</b><small>${u.d}</small>${sc === k && !S.d.net?.grant ? '<span class="pz-now">Đang dùng</span>' : ""}</button>`; }).join("")}</div>
+      <span class="pz-ic">${I[u.ic]}</span><b>${u.t}</b><small>${u.d}</small>${sc === k && !S.d.net?.grant ? '<span class="pz-now">Đang dùng</span>' : ""}</button>`; }).join("")}${gameKey()}</div>
     <div class="meta" style="margin-top:10px">${isAdmin() ? sceneScope() : "Camera, thiết bị nhà thông minh và WiFi riêng của Xuân San không bị ảnh hưởng."}</div></div>`;
+}
+
+// Phím nhanh chặn game: dùng chung nút data-appall của thẻ "Chặn game & nội dung" (appblock.js) → 2 chỗ luôn cùng một trạng thái
+function gameKey() {
+  const st = abGameState(); if (!st) return "";
+  const on = st === "all";
+  return `<button class="pz-key game ${on ? "cur" : ""}" data-appall="${on ? 0 : 1}" aria-pressed="${on}">
+    <span class="pz-ic">${I.console || I.clock}</span><b>${on ? "Mở lại game" : "Chặn game"}</b><small>${on ? "Đang chặn hết game · bấm để cho chơi lại" : st === "some" ? "Đang chặn một phần · bấm để chặn hết" : "Liên Quân, Roblox, Discord, mọi game khác"}</small>${on ? '<span class="pz-now">Đang chặn</span>' : ""}</button>`;
 }
 
 // Xuân San: xem rõ phím nhanh tác động lên WiFi nào, chừa WiFi nào

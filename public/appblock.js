@@ -7,14 +7,21 @@ const abSchedTxt = (s) => s.enabled ? `Tự chặn ${s.from}–${s.to} · ${type
 const abRow = (x) => `<div class="row wf-row" style="cursor:default"><div style="min-width:0;flex:1"><div class="nm">${esc(x.name)}</div><div class="meta">${x.active ? `<span style="color:var(--bad)">Đang chặn</span>${x.on ? "" : x.id === "bypass" ? " (tự bật khi chặn game)" : " theo giờ"}` : "Đang cho dùng"}</div></div>
   <button class="sw ${x.on ? "on" : ""}" role="switch" aria-checked="${x.on}" aria-label="Chặn ${esc(x.name)}" data-appsw="${x.id}"></button></div>`;
 const abAlerts = (a) => `${a.err ? `<div class="alert bad">${I.alert}<div>Chưa áp dụng được: ${esc(a.err)}</div></div>` : ""}${a.linkedOk ? "" : `<div class="alert">${I.alert}<div>Bộ lọc chưa nhận ra mạng nhà nên <b>chưa chặn được</b>. Mở app này bằng WiFi nhà một lần là tự nhận lại.</div></div>`}`;
+// Trạng thái chặn game theo công tắc: "all" = bật hết, "some" = bật một phần, "none" = tắt hết; null = chưa kết nối bộ lọc
+function abGameState() {
+  const a = S.d?.apps; if (!a?.configured) return null;
+  const g = abItems("game"), n = g.filter((x) => x.on).length;
+  return n && n === g.length ? "all" : n ? "some" : "none";
+}
 function appBlockCard() {
   const a = S.d?.apps; if (!a) return "";
   const head = `<div class="card-h"><span style="color:var(--pri)">${I.console || I.clock}</span><h2>Chặn game & nội dung</h2><div class="grow"></div><small class="hide-m">Áp dụng cho mọi máy dùng WiFi nhà</small></div>`;
   if (!a.configured) return isAdmin() ? `<div class="card" style="margin-bottom:16px">${head}<div class="alert">${I.alert}<div>Chưa kết nối bộ lọc NextDNS. Chạy <b>bin/setup-appblock.sh</b> để nhập API key, rồi trỏ DNS của router về NextDNS.</div></div></div>` : "";
+  const gs = abGameState();
   const others = a.items.filter((x) => x.group !== "game" && x.id !== "bypass" && x.active).length;
   return `<div class="card" style="margin-bottom:16px">${head}${abAlerts(a)}
-    <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn red" data-appall="1" style="flex:1;height:44px">Chặn toàn bộ</button><button class="btn" data-appall="0" style="flex:1;height:44px">Gỡ toàn bộ</button></div>
-    <p class="meta" style="margin:-4px 0 10px">Hai nút này không đụng tới YouTube và Netflix, để TV vẫn xem được. Muốn chặn 2 mục đó thì gạt tay trong “Chặn thêm”.</p>
+    <div style="display:flex;gap:8px;margin-bottom:10px"><button class="btn red ab-all ${gs === "all" ? "cur" : ""}" data-appall="1" aria-pressed="${gs === "all"}" style="flex:1;height:44px">${gs === "all" ? "✓ Đang chặn toàn bộ" : "Chặn toàn bộ"}</button><button class="btn ab-all ${gs === "none" ? "cur" : ""}" data-appall="0" aria-pressed="${gs === "none"}" style="flex:1;height:44px">${gs === "none" ? "✓ Đã gỡ toàn bộ" : "Gỡ toàn bộ"}</button></div>
+    <p class="meta" style="margin:-4px 0 10px">Nút “Chặn game” ở ô “Bấm 1 lần” chính là 2 nút này. Hai nút này không đụng tới YouTube và Netflix, để TV vẫn xem được. Muốn chặn 2 mục đó thì gạt tay trong “Chặn thêm”.</p>
     <div class="list">
       ${abItems("game").map(abRow).join("")}${abRow(a.items.find((x) => x.id === "bypass"))}
       <div class="row wf-row" data-appsched="1" style="cursor:pointer"><div style="min-width:0;flex:1"><div class="nm">Giờ chặn</div><div class="meta">${esc(abSchedTxt(a.sched))}${a.inWindow ? ' · <span style="color:var(--bad)">đang trong giờ chặn</span>' : ""}</div></div><div class="rr">${I.chev}</div></div>

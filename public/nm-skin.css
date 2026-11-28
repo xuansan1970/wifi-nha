@@ -64,6 +64,8 @@
 .pz-key{border-width:1px;border-radius:22px;transition:transform .35s var(--nm-ease),box-shadow .35s var(--nm-ease)}
 .pz-key.cur.on{box-shadow:0 0 0 2px var(--nm-ok),var(--nm-sh-hi)}
 .pz-key.cur.off{box-shadow:0 0 0 2px var(--nm-bad),var(--nm-sh-hi)}
+.pz-key.cur.game{box-shadow:0 0 0 2px var(--nm-pri,var(--pri)),var(--nm-sh-hi)}
+.pz-key.game .pz-ic{background:var(--nm-grad-indigo)}
 .pz-key.cur.ghost{box-shadow:0 0 0 2px var(--nm-warn),var(--nm-sh-hi)}
 .pz-key .pz-ic{transition:transform .35s var(--nm-ease)}
 .pz-key.nm-tilting .pz-ic{transform:translateZ(36px)}
