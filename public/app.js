@@ -70,8 +70,8 @@ const ADMIN_TABS = noCam([["home", "Tổng quan", "home"], ["devices", "Thiết 
 // Mục cũ đã gộp: Gia đình → Thiết bị (Các con), Hẹn giờ → WiFi & Hẹn giờ, Dữ liệu → mở từ Nhật ký
 const TAB_ALIAS = { family: "devices", rules: "wifi" };
 const PARENT_TABS = noCam([["home", "Điều khiển", "power"], ["family", "Các con", "family"], ["devices", "Thiết bị", "devices"], ["cameras", "Camera", "camera"], ["news", "Tính năng mới", "spark"], ["settings", "Tài khoản", "user"]]);
-// Điện thoại: đúng 4 tab, mỗi tab một việc — Mạng (bật/tắt, bấm 1 lần, hẹn giờ) · Chặn (game, máy đang chặn, các con) · Thiết bị · Thêm (WiFi & router, hoạt động, nhật ký, tin mới, cài đặt)
-const MOBILE_TABS = [["home", "Mạng", "power"], ["block", "Chặn", "lock"], ["devices", "Thiết bị", "devices"], ["more", "Thêm", "gear"]];
+// Điện thoại: 5 tab, mỗi tab một việc — Mạng (bật/tắt, bấm 1 lần + chặn game nhanh, hẹn giờ) · WiFi (từng WiFi, modem, router, giờ nghỉ) · Chặn (game, máy đang chặn, các con) · Thiết bị · Thêm (hoạt động, nhật ký, tin mới, cài đặt)
+const MOBILE_TABS = [["home", "Mạng", "power"], ["wifi", "WiFi", "wifi"], ["block", "Chặn", "lock"], ["devices", "Thiết bị", "devices"], ["more", "Thêm", "gear"]];
 const MOBILE_ADMIN = MOBILE_TABS.map((t) => t[0]);
 const PHONE_MQ = matchMedia("(max-width:719px)");
 const isPhone = () => PHONE_MQ.matches;
@@ -273,7 +273,7 @@ function go(t) {
   if (t === "cameras") loadCameras();
 }
 function moreSheet() {
-  sheet(`<div class="sheet-h"><div class="t"><h3>Thêm</h3></div></div><div class="list">${ADMIN_TABS.filter((t) => !MOBILE_ADMIN.includes(t[0])).map((t) => (t[0] === "wifi" ? ["wifi", "WiFi, router & giờ nghỉ", "wifi"] : t)).map(([k, l, ic]) => `<button class="row" data-go="${k}"><span class="av soft">${I[ic]}</span><span class="nm">${l}</span>${I.chev}</button>`).join("")}</div>`);
+  sheet(`<div class="sheet-h"><div class="t"><h3>Thêm</h3></div></div><div class="list">${ADMIN_TABS.filter((t) => !MOBILE_ADMIN.includes(t[0])).map(([k, l, ic]) => `<button class="row" data-go="${k}"><span class="av soft">${I[ic]}</span><span class="nm">${l}</span>${I.chev}</button>`).join("")}</div>`);
   $$("[data-go]").forEach((b) => (b.onclick = () => { closeSheet(); go(b.dataset.go); }));
 }
 async function refresh(btn) { await act(btn, async () => { await load("force"); if (S.tab === "cameras") await loadCameras(); }, "Đã cập nhật dữ liệu mới nhất").catch(() => {}); }
@@ -324,7 +324,7 @@ function vHome() {
   <div class="d-full"><div class="grid g3 routers">${R.map(routerCard).join("")}</div></div>
   </div>`;
 }
-// Điện thoại · tab Mạng: chỉ việc điều khiển mạng (bật/tắt + cho thêm giờ, bấm 1 lần, hẹn giờ)
+// Điện thoại · tab Mạng: điều khiển mạng (bật/tắt + cho thêm giờ, bấm 1 lần kèm nút chặn/mở game nhanh, hẹn giờ)
 function vHomePhone() {
   const err = S.d.errors?.length ? `<div class="alert bad">${I.alert}<div><b>Một số dữ liệu chưa tải được</b><br>${esc(S.d.errors[0])}</div></div>` : "";
   return header("Mạng") + err + `<div class="m-stack">${netHero()}${sceneKeys()}${timerCard()}</div>`;

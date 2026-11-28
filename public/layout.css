@@ -103,6 +103,4 @@
 .m-stack>.card,.m-stack>section.card{margin:0!important}
 @media (max-width:719px){
   .tabbar button{min-height:52px;font-size:12px}
-  /* Nút "Chặn game" đã có riêng ở tab Chặn → tab Mạng chỉ còn Bật/Tắt WiFi */
-  .m-stack .pz-key.game{display:none}
 }
