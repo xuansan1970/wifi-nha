@@ -3,6 +3,9 @@
    THÊM TÍNH NĂNG MỚI: thêm 1 mục lên ĐẦU danh sách NEWS (id không trùng). admin: true = chỉ Xuân San thấy. */
 "use strict";
 const NEWS = [
+  { id: "2026-11-28-bo-cuc-moi", date: "28/11/2026", title: "Giao diện gọn hơn, nhìn một lần thấy hết",
+    text: "Trang đầu xếp lại thành các ô cạnh nhau: trên cùng là số router, số máy, số máy bị chặn; giữa là nút bật/tắt mạng, Bấm 1 lần và Hẹn giờ; dưới là chặn game, WiFi trong nhà và 3 router. Mở trong app Nhà Mình thì menu nằm ngang phía trên, không còn 2 cột menu.",
+    eg: "Trên máy tính, Ba vừa thấy mạng đang bật, vừa bấm được “Chặn game” và hẹn giờ tắt WiFi mà không phải kéo xuống." },
   { id: "2026-11-28-nut-chan-game", date: "28/11/2026", title: "Nút nhanh “Chặn game” ngay cạnh nút WiFi",
     text: "Ô “Bấm 1 lần” ở trang đầu có thêm nút “Chặn game”. Bấm 1 lần là chặn hết game, bấm lại là cho chơi. Nút này đi chung với 2 nút “Chặn toàn bộ” / “Gỡ toàn bộ” bên dưới, bấm chỗ nào thì chỗ kia cũng đổi theo.",
     eg: "Tới giờ học, Ba bấm “Chặn game” ở trên cùng, không cần kéo xuống. Học xong bấm “Mở lại game”." },
