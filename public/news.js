@@ -4,27 +4,28 @@
 "use strict";
 const NEWS = [
   // 28/11/2026: viết lại toàn bộ cho ngắn (id mới "n2-…" → bảng bật lên hiện lại 1 lần cho mọi tài khoản, mọi máy)
-  { id: "n2-5-tab", date: "28/11/2026", title: "Điện thoại: 5 mục ở thanh dưới",
+  { id: "n2-5-tab", ic: "phone", c: "#2F7BFF", date: "28/11/2026", title: "Điện thoại: 5 mục ở thanh dưới",
     text: "Mạng · WiFi · Chặn · Thiết bị · Thêm. Mỗi mục một việc, dễ tìm." },
-  { id: "n2-chan-game", date: "28/11/2026", title: "Chặn game: bấm 1 lần",
+  { id: "n2-chan-game", ic: "console", c: "#7B5CFF", date: "28/11/2026", title: "Chặn game: bấm 1 lần",
     text: "Mục Mạng → bấm “Chặn game” là chặn hết game; bấm lại là mở. TV vẫn xem YouTube, Netflix bình thường." },
-  { id: "n2-chan-them", date: "24/11/2026", title: "Chặn mạng xã hội, đặt giờ chặn",
+  { id: "n2-chan-them", ic: "lock", c: "#FF4D6A", date: "24/11/2026", title: "Chặn mạng xã hội, đặt giờ chặn",
     text: "Mục Chặn: gạt để chặn TikTok, YouTube…; đặt giờ để tự chặn, tự mở. Máy dùng 4G thì không chặn được." },
-  { id: "n2-chan-may", date: "24/11/2026", title: "Chặn một máy là chặn hẳn",
+  { id: "n2-chan-may", ic: "devices", c: "#FF8A1F", date: "24/11/2026", title: "Chặn một máy là chặn hẳn",
     text: "Máy bị chặn không vào được WiFi nào trong nhà, đổi sang WiFi khác cũng không lách được." },
-  { id: "n2-ten-may", date: "24/11/2026", title: "Tên máy đúng hơn",
+  { id: "n2-ten-may", ic: "tv", c: "#12B5A8", date: "24/11/2026", title: "Tên máy đúng hơn",
     text: "Camera, TV, laptop hiện đúng tên và loại. Máy giấu tên ghi là “Thiết bị ẩn danh”." },
-  { id: "n2-hoat-dong", admin: true, date: "24/11/2026", title: "Mục Hoạt động",
+  { id: "n2-hoat-dong", ic: "clock", c: "#2FB85C", admin: true, date: "24/11/2026", title: "Mục Hoạt động",
     text: "Xem máy nào đã vào mạng, dùng bao nhiêu dữ liệu, sóng mạnh hay yếu." },
-  { id: "n2-faceid", date: "24/11/2026", title: "Mở app bằng khuôn mặt, tự khoá sau 15 phút",
+  { id: "n2-faceid", ic: "user", c: "#E0469B", date: "24/11/2026", title: "Mở app bằng khuôn mặt, tự khoá sau 15 phút",
     text: "Bật ở Cài đặt → “Bật trên máy này”. Để máy 15 phút không dùng, app tự khoá." },
-  { id: "n2-may-tinh", date: "28/11/2026", title: "Máy tính: trang đầu thấy hết một lần",
+  { id: "n2-may-tinh", ic: "laptop", c: "#5B6CFF", date: "28/11/2026", title: "Máy tính: trang đầu thấy hết một lần",
     text: "Các ô xếp cạnh nhau. Mở trong Nhà Mình thì menu nằm ngang phía trên." },
 ];
 I.spark = P('<path d="M11 3l2 6 6 2-6 2-2 6-2-6-6-2 6-2z"/><path d="M19 16v4M17 18h4"/>');
 const newsFor = () => NEWS.filter((n) => !n.admin || isAdmin());
 const newsUnseen = () => (S.newsSeen ? newsFor().filter((n) => !S.newsSeen.includes(n.id)).length : 0);
-const newsItem = (n, fresh) => `<div class="news-i"><div class="news-t">${esc(n.title)}${fresh ? ' <span class="badge" style="vertical-align:2px">Mới</span>' : ""}</div><div class="news-d">${esc(n.date)}</div><p>${esc(n.text)}</p>${n.eg ? `<p class="news-eg"><b>Ví dụ:</b> ${esc(n.eg)}</p>` : ""}${n.how ? `<p class="news-eg"><b>Cách dùng:</b> ${esc(n.how)}</p>` : ""}</div>`;
+// Mỗi tin: ô icon màu riêng + viền màu; tin chưa xem có nhãn "MỚI" nhấp nháy
+const newsItem = (n, fresh) => `<div class="news-i${fresh ? " fresh" : ""}" style="--nc:${n.c || "var(--pri)"}"><span class="news-ic">${I[n.ic] || I.spark}</span><div class="news-b"><div class="news-t">${esc(n.title)}${fresh ? ' <span class="news-new">MỚI</span>' : ""}</div><div class="news-d">${esc(n.date)}</div><p>${esc(n.text)}</p>${n.eg ? `<p class="news-eg"><b>Ví dụ:</b> ${esc(n.eg)}</p>` : ""}${n.how ? `<p class="news-eg"><b>Cách dùng:</b> ${esc(n.how)}</p>` : ""}</div></div>`;
 async function newsMark(ids) {
   if (!ids.length) return;
   S.newsSeen = [...new Set([...(S.newsSeen || []), ...ids])];
@@ -39,8 +40,8 @@ function vNews() {
 function newsOpened() { const ids = newsFor().filter((n) => S.newsSeen && !S.newsSeen.includes(n.id)).map((n) => n.id); S.newsFresh = ids; if (ids.length) newsMark(ids).then(() => { if (S.me) shell(), render(); }); }
 // Bảng bật lên khi vào app nếu còn cập nhật chưa xem
 function newsSheet(items) {
-  sheet(`<div class="grab"></div><div class="sheet-h"><div class="t"><h3>Tính năng mới</h3><p>App vừa cập nhật. Đọc 30 giây là nắm.</p></div><button class="btn ghost icon" data-close aria-label="Đóng">${I.x}</button></div>
-    <div class="news">${items.map((n) => newsItem(n, false)).join("")}</div>
+  sheet(`<div class="grab"></div><div class="sheet-h"><span class="av news-hero">${I.spark}</span><div class="t"><h3>Tính năng mới <span class="news-new">${items.length} MỚI</span></h3><p>App vừa cập nhật. Đọc 30 giây là nắm.</p></div><button class="btn ghost icon" data-close aria-label="Đóng">${I.x}</button></div>
+    <div class="news">${items.map((n) => newsItem(n, true)).join("")}</div>
     <div class="foot"><button class="btn pri block" id="newsOk" style="height:48px">Đã hiểu</button></div>`);
   $$("[data-close]", $("#sheet")).forEach((b) => (b.onclick = closeSheet));
   $("#newsOk").onclick = () => { closeSheet(); newsMark(items.map((n) => n.id)).then(() => { if (S.me) shell(), render(); }); };
