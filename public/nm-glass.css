@@ -37,7 +37,7 @@
   --nm-blur:blur(24px) saturate(180%);
   --nm-ease:cubic-bezier(.2,.8,.2,1); --nm-spring:cubic-bezier(.34,1.4,.64,1);
   --nm-r-sm:12px; --nm-r:20px; --nm-r-lg:28px;
-  --nm-font:"Be Vietnam Pro",-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif;
+  --nm-font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Helvetica Neue",system-ui,"Segoe UI",Roboto,sans-serif;
   --nm-glass:linear-gradient(160deg,var(--nm-glass-a),var(--nm-glass-b));
 }
 :root[data-theme="dark"]{
