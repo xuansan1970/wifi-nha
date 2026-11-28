@@ -1,0 +1,121 @@
+/* =====================================================================
+   NHÀ MÌNH · PASTEL AURA GLASS v1 — lõi design system dùng chung
+   Học từ "Night Fire Glass": nền aura trôi chậm, khối kính mờ nổi lớp,
+   chiều sâu 3D theo chuột, chuyển động ngắn có mục đích (≤ .5s).
+   Đổi sang bảng màu pastel: oải hương · hồng đào · bạc hà · xanh trời.
+   File này GIỐNG NHAU ở mọi app; mỗi app có thêm nm-skin.css riêng.
+   Sửa ở một app thì chép sang các app còn lại (scripts: xem README).
+   ===================================================================== */
+
+:root, :root[data-theme="light"]{
+  --nm-bg:#F5F2FC; --nm-bg2:#ECE8F8;
+  --nm-ink:#221E3D; --nm-ink2:#4A4669; --nm-mute:#736F8E; --nm-faint:#A29EBA;
+  --nm-glass-a:rgba(255,255,255,.74); --nm-glass-b:rgba(255,255,255,.44);
+  --nm-solid:#FFFFFF; --nm-raise:rgba(255,255,255,.58); --nm-raise2:rgba(255,255,255,.86);
+  --nm-well:rgba(110,96,180,.07);
+  --nm-line:rgba(255,255,255,.80); --nm-line2:rgba(118,104,190,.20); --nm-hair:rgba(70,58,140,.10);
+  --nm-pri:#7466F0; --nm-pri2:#6253E6; --nm-pri-ink:#FFFFFF; --nm-pri-soft:rgba(116,102,240,.14);
+  --nm-grad:linear-gradient(135deg,#8B7BFF 0%,#B38CFF 48%,#FF9DC3 100%);
+  --nm-grad-sky:linear-gradient(135deg,#86D3FF 0%,#8E9CFF 100%);
+  --nm-grad-mint:linear-gradient(135deg,#6FE3C3 0%,#86D3FF 100%);
+  --nm-grad-peach:linear-gradient(135deg,#FFC59E 0%,#FF9DC3 100%);
+  --nm-grad-lemon:linear-gradient(135deg,#FFE08A 0%,#FFB39A 100%);
+  --nm-ok:#1F9E73; --nm-ok-soft:rgba(46,196,140,.16);
+  --nm-warn:#C77A12; --nm-warn-soft:rgba(245,170,60,.20);
+  --nm-bad:#DC4A74; --nm-bad-soft:rgba(240,108,140,.16);
+  --nm-info:#3A86D6; --nm-info-soft:rgba(90,160,240,.16);
+  --nm-a1:rgba(190,176,255,.60); --nm-a2:rgba(255,190,214,.52); --nm-a3:rgba(160,238,210,.46); --nm-a4:rgba(180,224,255,.55);
+  --nm-sh:0 22px 46px -24px rgba(72,56,168,.30),0 2px 6px -2px rgba(72,56,168,.08);
+  --nm-sh-hi:0 34px 64px -28px rgba(72,56,168,.42),0 6px 14px -6px rgba(72,56,168,.14);
+  --nm-sh-btn:0 12px 24px -12px rgba(116,90,240,.75);
+  --nm-inset:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(118,104,190,.06);
+  --nm-blur:blur(20px) saturate(165%);
+  --nm-ease:cubic-bezier(.2,.8,.2,1); --nm-spring:cubic-bezier(.34,1.5,.64,1);
+  --nm-r-sm:12px; --nm-r:20px; --nm-r-lg:28px;
+  --nm-font:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --nm-glass:linear-gradient(145deg,var(--nm-glass-a),var(--nm-glass-b));
+}
+:root[data-theme="dark"]{
+  --nm-bg:#121129; --nm-bg2:#1A1836;
+  --nm-ink:#F3F1FF; --nm-ink2:#D0CCEB; --nm-mute:#9C98BD; --nm-faint:#6F6B93;
+  --nm-glass-a:rgba(255,255,255,.11); --nm-glass-b:rgba(255,255,255,.035);
+  --nm-solid:#201E3E; --nm-raise:rgba(255,255,255,.06); --nm-raise2:rgba(255,255,255,.11);
+  --nm-well:rgba(0,0,0,.22);
+  --nm-line:rgba(255,255,255,.14); --nm-line2:rgba(255,255,255,.20); --nm-hair:rgba(255,255,255,.08);
+  --nm-pri:#A99CFF; --nm-pri2:#BDB2FF; --nm-pri-ink:#171433; --nm-pri-soft:rgba(169,156,255,.18);
+  --nm-grad:linear-gradient(135deg,#9A8AFF 0%,#C59CFF 48%,#FFA6CA 100%);
+  --nm-ok:#62E0B2; --nm-ok-soft:rgba(98,224,178,.16);
+  --nm-warn:#FFC873; --nm-warn-soft:rgba(255,200,115,.16);
+  --nm-bad:#FF8FAF; --nm-bad-soft:rgba(255,143,175,.16);
+  --nm-info:#86C2FF; --nm-info-soft:rgba(134,194,255,.16);
+  --nm-a1:rgba(130,110,255,.34); --nm-a2:rgba(255,130,180,.20); --nm-a3:rgba(90,220,180,.14); --nm-a4:rgba(110,180,255,.20);
+  --nm-sh:0 24px 50px -22px rgba(0,0,0,.70),0 2px 6px -2px rgba(0,0,0,.4);
+  --nm-sh-hi:0 34px 70px -26px rgba(0,0,0,.80),0 0 0 1px rgba(255,255,255,.06);
+  --nm-sh-btn:0 12px 26px -12px rgba(150,130,255,.85);
+  --nm-inset:inset 0 1px 0 rgba(255,255,255,.16);
+}
+
+/* ---------- Nền AURA: lớp cố định phía sau toàn trang ---------- */
+html.nm{background:var(--nm-bg)!important}
+html.nm body{background:transparent!important}
+html.nm body::before{
+  content:"";position:fixed;inset:-20vmax;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(34vmax 30vmax at 18% 14%,var(--nm-a1),transparent 70%),
+    radial-gradient(30vmax 28vmax at 86% 30%,var(--nm-a2),transparent 70%),
+    radial-gradient(34vmax 30vmax at 44% 92%,var(--nm-a3),transparent 70%),
+    radial-gradient(26vmax 24vmax at 92% 88%,var(--nm-a4),transparent 70%);
+  animation:nm-drift 22s ease-in-out infinite alternate;
+}
+html.nm.is-embed body::before{inset:-10vmax}
+@keyframes nm-drift{to{transform:translate3d(3vmax,-2vmax,0) scale(1.06)}}
+
+/* ---------- Kính ---------- */
+.nm-glass{
+  background:var(--nm-glass);border:1px solid var(--nm-line);
+  -webkit-backdrop-filter:var(--nm-blur);backdrop-filter:var(--nm-blur);
+  box-shadow:var(--nm-sh),var(--nm-inset);
+}
+
+/* ---------- Chuyển động ---------- */
+@keyframes nm-rise{from{opacity:0;transform:translateY(16px) scale(.975)}to{opacity:1;transform:none}}
+@keyframes nm-swap{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes nm-pop{from{opacity:0;transform:translateY(28px) scale(.96) rotateX(6deg)}to{opacity:1;transform:none}}
+@keyframes nm-fade{from{opacity:0}to{opacity:1}}
+@keyframes nm-ripple{from{opacity:.55;transform:translate(-50%,-50%) scale(0)}to{opacity:0;transform:translate(-50%,-50%) scale(1)}}
+@keyframes nm-pulse{0%{box-shadow:0 0 0 0 var(--nm-ok-soft)}70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes nm-shimmer{to{background-position:-200% 0}}
+
+/* xuất hiện lần đầu (nm-fx.js gắn --nm-i theo thứ tự) */
+html.nm:not(.nm-settled) .nm-rise{animation:nm-rise .5s var(--nm-ease) both;animation-delay:calc(var(--nm-i,0) * 35ms)}
+/* đổi tab / đổi trang: chỉ chạy khi cấu trúc thật sự đổi */
+.nm-swap > *{animation:nm-swap .36s var(--nm-ease) both}
+.nm-swap > *:nth-child(2){animation-delay:30ms}.nm-swap > *:nth-child(3){animation-delay:60ms}
+.nm-swap > *:nth-child(4){animation-delay:90ms}.nm-swap > *:nth-child(5){animation-delay:120ms}
+.nm-swap > *:nth-child(n+6){animation-delay:150ms}
+
+/* gợn sáng khi bấm */
+.nm-ripple-host{position:relative;overflow:hidden;isolation:isolate}
+.nm-ripple{position:absolute;width:var(--nm-rs,200px);height:var(--nm-rs,200px);border-radius:50%;pointer-events:none;z-index:0;
+  background:radial-gradient(circle,rgba(255,255,255,.55),rgba(255,255,255,0) 70%);animation:nm-ripple .55s var(--nm-ease) forwards}
+:root[data-theme="dark"] .nm-ripple{background:radial-gradient(circle,rgba(255,255,255,.28),rgba(255,255,255,0) 70%)}
+
+/* nghiêng 3D theo chuột (chỉ máy có chuột) */
+.nm-tilting{transform-style:preserve-3d;will-change:transform}
+
+/* nút nhún khi bấm */
+.nm-press{transition:transform .32s var(--nm-spring)!important}
+.nm-press:active{transform:scale(.955)!important;transition-duration:.08s!important}
+
+/* chữ gradient cho tiêu đề nhấn */
+.nm-grad-text{background:var(--nm-grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* thanh cuộn mảnh */
+html.nm *{scrollbar-width:thin;scrollbar-color:var(--nm-line2) transparent}
+html.nm ::selection{background:var(--nm-pri-soft)}
+
+@media (prefers-reduced-motion:reduce){
+  html.nm body::before{animation:none}
+  .nm-rise,.nm-swap > *,.nm-ripple{animation:none!important}
+  .nm-tilting{transform:none!important}
+}
