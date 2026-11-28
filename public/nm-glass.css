@@ -1,58 +1,68 @@
 /* =====================================================================
-   NHÀ MÌNH · PASTEL AURA GLASS v1 — lõi design system dùng chung
+   NHÀ MÌNH · APPLE GLASS v2 — lõi design system dùng chung
    Học từ "Night Fire Glass": nền aura trôi chậm, khối kính mờ nổi lớp,
    chiều sâu 3D theo chuột, chuyển động ngắn có mục đích (≤ .5s).
-   Đổi sang bảng màu pastel: oải hương · hồng đào · bạc hà · xanh trời.
+   Màu theo trạng thái kiểu hệ thống Apple (xanh dương / xanh lá / cam / đỏ trên nền xám trung tính).
    File này GIỐNG NHAU ở mọi app; mỗi app có thêm nm-skin.css riêng.
    Sửa ở một app thì chép sang các app còn lại (scripts: xem README).
    ===================================================================== */
 
+/* Màu theo chuẩn hệ thống Apple: nền xám trung tính, kính trắng/xám,
+   màu chỉ dùng cho TRẠNG THÁI (xanh dương = hành động/đang chọn, xanh lá = đang bật/ổn,
+   cam = chờ/cảnh báo, đỏ = lỗi/tắt). Không gradient tím. */
 :root, :root[data-theme="light"]{
-  --nm-bg:#F5F2FC; --nm-bg2:#ECE8F8;
-  --nm-ink:#221E3D; --nm-ink2:#4A4669; --nm-mute:#736F8E; --nm-faint:#A29EBA;
-  --nm-glass-a:rgba(255,255,255,.74); --nm-glass-b:rgba(255,255,255,.44);
-  --nm-solid:#FFFFFF; --nm-raise:rgba(255,255,255,.58); --nm-raise2:rgba(255,255,255,.86);
-  --nm-well:rgba(110,96,180,.07);
-  --nm-line:rgba(255,255,255,.80); --nm-line2:rgba(118,104,190,.20); --nm-hair:rgba(70,58,140,.10);
-  --nm-pri:#7466F0; --nm-pri2:#6253E6; --nm-pri-ink:#FFFFFF; --nm-pri-soft:rgba(116,102,240,.14);
-  --nm-grad:linear-gradient(135deg,#8B7BFF 0%,#B38CFF 48%,#FF9DC3 100%);
-  --nm-grad-sky:linear-gradient(135deg,#86D3FF 0%,#8E9CFF 100%);
-  --nm-grad-mint:linear-gradient(135deg,#6FE3C3 0%,#86D3FF 100%);
-  --nm-grad-peach:linear-gradient(135deg,#FFC59E 0%,#FF9DC3 100%);
-  --nm-grad-lemon:linear-gradient(135deg,#FFE08A 0%,#FFB39A 100%);
-  --nm-ok:#1F9E73; --nm-ok-soft:rgba(46,196,140,.16);
-  --nm-warn:#C77A12; --nm-warn-soft:rgba(245,170,60,.20);
-  --nm-bad:#DC4A74; --nm-bad-soft:rgba(240,108,140,.16);
-  --nm-info:#3A86D6; --nm-info-soft:rgba(90,160,240,.16);
-  --nm-a1:rgba(190,176,255,.60); --nm-a2:rgba(255,190,214,.52); --nm-a3:rgba(160,238,210,.46); --nm-a4:rgba(180,224,255,.55);
-  --nm-sh:0 22px 46px -24px rgba(72,56,168,.30),0 2px 6px -2px rgba(72,56,168,.08);
-  --nm-sh-hi:0 34px 64px -28px rgba(72,56,168,.42),0 6px 14px -6px rgba(72,56,168,.14);
-  --nm-sh-btn:0 12px 24px -12px rgba(116,90,240,.75);
-  --nm-inset:inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 0 rgba(118,104,190,.06);
-  --nm-blur:blur(20px) saturate(165%);
-  --nm-ease:cubic-bezier(.2,.8,.2,1); --nm-spring:cubic-bezier(.34,1.5,.64,1);
+  --nm-bg:#EEF1F5; --nm-bg2:#E5E9EF;
+  --nm-ink:#1D1D1F; --nm-ink2:#3A3A3C; --nm-mute:#6E6E73; --nm-faint:#AEAEB2;
+  --nm-glass-a:rgba(255,255,255,.72); --nm-glass-b:rgba(255,255,255,.48);
+  --nm-solid:#FFFFFF; --nm-raise:rgba(255,255,255,.55); --nm-raise2:rgba(255,255,255,.88);
+  --nm-well:rgba(118,118,128,.12);
+  --nm-line:rgba(255,255,255,.85); --nm-line2:rgba(60,60,67,.18); --nm-hair:rgba(60,60,67,.12);
+  --nm-pri:#007AFF; --nm-pri2:#0062CC; --nm-pri-ink:#FFFFFF; --nm-pri-soft:rgba(0,122,255,.12);
+  --nm-sel:#FFFFFF; --nm-sel-ink:#1D1D1F; --nm-sh-sel:0 3px 10px -2px rgba(0,0,0,.14),0 0 0 .5px rgba(0,0,0,.04);
+  --nm-grad:linear-gradient(180deg,#1C8BFF 0%,#007AFF 100%);
+  --nm-grad-sky:linear-gradient(180deg,#5AC8FA 0%,#0A84FF 100%);
+  --nm-grad-mint:linear-gradient(180deg,#4CD964 0%,#34C759 100%);
+  --nm-grad-peach:linear-gradient(180deg,#FF6961 0%,#FF3B30 100%);
+  --nm-grad-lemon:linear-gradient(180deg,#FFB340 0%,#FF9500 100%);
+  --nm-grad-indigo:linear-gradient(180deg,#7A78F0 0%,#5856D6 100%);
+  --nm-ok:#248A3D; --nm-ok-soft:rgba(52,199,89,.16);
+  --nm-warn:#C25E00; --nm-warn-soft:rgba(255,149,0,.16);
+  --nm-bad:#D70015; --nm-bad-soft:rgba(255,59,48,.13);
+  --nm-info:#0062CC; --nm-info-soft:rgba(0,122,255,.12);
+  --nm-a1:rgba(130,180,255,.38); --nm-a2:rgba(255,255,255,.70); --nm-a3:rgba(160,215,255,.32); --nm-a4:rgba(205,215,230,.60);
+  --nm-sh:0 1px 2px rgba(0,0,0,.05),0 10px 30px -12px rgba(0,0,0,.14);
+  --nm-sh-hi:0 2px 4px rgba(0,0,0,.06),0 22px 48px -18px rgba(0,0,0,.24);
+  --nm-sh-btn:0 1px 2px rgba(0,0,0,.08),0 6px 14px -6px rgba(0,122,255,.45);
+  --nm-inset:inset 0 1px 0 rgba(255,255,255,.95),inset 0 0 0 .5px rgba(255,255,255,.4);
+  --nm-blur:blur(24px) saturate(180%);
+  --nm-ease:cubic-bezier(.2,.8,.2,1); --nm-spring:cubic-bezier(.34,1.4,.64,1);
   --nm-r-sm:12px; --nm-r:20px; --nm-r-lg:28px;
-  --nm-font:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --nm-glass:linear-gradient(145deg,var(--nm-glass-a),var(--nm-glass-b));
+  --nm-font:"Be Vietnam Pro",-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,"Segoe UI",Roboto,sans-serif;
+  --nm-glass:linear-gradient(160deg,var(--nm-glass-a),var(--nm-glass-b));
 }
 :root[data-theme="dark"]{
-  --nm-bg:#121129; --nm-bg2:#1A1836;
-  --nm-ink:#F3F1FF; --nm-ink2:#D0CCEB; --nm-mute:#9C98BD; --nm-faint:#6F6B93;
-  --nm-glass-a:rgba(255,255,255,.11); --nm-glass-b:rgba(255,255,255,.035);
-  --nm-solid:#201E3E; --nm-raise:rgba(255,255,255,.06); --nm-raise2:rgba(255,255,255,.11);
-  --nm-well:rgba(0,0,0,.22);
-  --nm-line:rgba(255,255,255,.14); --nm-line2:rgba(255,255,255,.20); --nm-hair:rgba(255,255,255,.08);
-  --nm-pri:#A99CFF; --nm-pri2:#BDB2FF; --nm-pri-ink:#171433; --nm-pri-soft:rgba(169,156,255,.18);
-  --nm-grad:linear-gradient(135deg,#9A8AFF 0%,#C59CFF 48%,#FFA6CA 100%);
-  --nm-ok:#62E0B2; --nm-ok-soft:rgba(98,224,178,.16);
-  --nm-warn:#FFC873; --nm-warn-soft:rgba(255,200,115,.16);
-  --nm-bad:#FF8FAF; --nm-bad-soft:rgba(255,143,175,.16);
-  --nm-info:#86C2FF; --nm-info-soft:rgba(134,194,255,.16);
-  --nm-a1:rgba(130,110,255,.34); --nm-a2:rgba(255,130,180,.20); --nm-a3:rgba(90,220,180,.14); --nm-a4:rgba(110,180,255,.20);
-  --nm-sh:0 24px 50px -22px rgba(0,0,0,.70),0 2px 6px -2px rgba(0,0,0,.4);
-  --nm-sh-hi:0 34px 70px -26px rgba(0,0,0,.80),0 0 0 1px rgba(255,255,255,.06);
-  --nm-sh-btn:0 12px 26px -12px rgba(150,130,255,.85);
-  --nm-inset:inset 0 1px 0 rgba(255,255,255,.16);
+  --nm-bg:#0B0C0F; --nm-bg2:#141518;
+  --nm-ink:#F5F5F7; --nm-ink2:#D1D1D6; --nm-mute:#98989F; --nm-faint:#636366;
+  --nm-glass-a:rgba(58,58,62,.62); --nm-glass-b:rgba(36,36,40,.50);
+  --nm-solid:#1C1C1E; --nm-raise:rgba(255,255,255,.06); --nm-raise2:rgba(255,255,255,.10);
+  --nm-well:rgba(118,118,128,.24);
+  --nm-line:rgba(255,255,255,.12); --nm-line2:rgba(255,255,255,.16); --nm-hair:rgba(255,255,255,.08);
+  --nm-pri:#0A84FF; --nm-pri2:#409CFF; --nm-pri-ink:#FFFFFF; --nm-pri-soft:rgba(10,132,255,.20);
+  --nm-sel:rgba(255,255,255,.20); --nm-sel-ink:#FFFFFF; --nm-sh-sel:0 2px 8px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.15);
+  --nm-grad:linear-gradient(180deg,#2A93FF 0%,#0A84FF 100%);
+  --nm-grad-mint:linear-gradient(180deg,#45DC6B 0%,#30D158 100%);
+  --nm-grad-peach:linear-gradient(180deg,#FF6B63 0%,#FF453A 100%);
+  --nm-grad-lemon:linear-gradient(180deg,#FFB340 0%,#FF9F0A 100%);
+  --nm-grad-indigo:linear-gradient(180deg,#7D7AFF 0%,#5E5CE6 100%);
+  --nm-ok:#30D158; --nm-ok-soft:rgba(48,209,88,.18);
+  --nm-warn:#FF9F0A; --nm-warn-soft:rgba(255,159,10,.18);
+  --nm-bad:#FF453A; --nm-bad-soft:rgba(255,69,58,.18);
+  --nm-info:#64D2FF; --nm-info-soft:rgba(100,210,255,.16);
+  --nm-a1:rgba(30,80,190,.30); --nm-a2:rgba(255,255,255,.04); --nm-a3:rgba(20,120,200,.16); --nm-a4:rgba(90,100,130,.18);
+  --nm-sh:0 1px 2px rgba(0,0,0,.4),0 14px 34px -14px rgba(0,0,0,.7);
+  --nm-sh-hi:0 2px 6px rgba(0,0,0,.45),0 26px 56px -20px rgba(0,0,0,.85);
+  --nm-sh-btn:0 6px 16px -6px rgba(10,132,255,.6);
+  --nm-inset:inset 0 1px 0 rgba(255,255,255,.12),inset 0 0 0 .5px rgba(255,255,255,.05);
 }
 
 /* ---------- Nền AURA: lớp cố định phía sau toàn trang ---------- */
